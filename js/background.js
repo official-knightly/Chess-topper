@@ -7,14 +7,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     const fen = typeof message.fen === "string" ? message.fen.trim() : "";
     if (!fen || fen.length > 200) throw new Error("Invalid FEN");
     const { apiKey = "" } = await chrome.storage.local.get({ apiKey: "" });
-    if (!apiKey) throw new Error("Add your rotated Stockfish API key in the extension popup");
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
     try {
       const response = await fetch(API_URL, {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${apiKey}`,
+          ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
