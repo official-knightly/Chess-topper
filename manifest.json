@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Chess Topper — Analysis Bar",
   "version": "0.3.0",
-  "description": "Server-first analysis with a local single-threaded Stockfish WASM fallback for analysis, study, puzzles, and post-game review.",
+  "description": "Server-first analysis with a local full-strength Stockfish 19 WASM engine for analysis, study, puzzles, and post-game review.",
   "permissions": [
     "storage",
     "activeTab",
@@ -44,8 +44,8 @@
   "web_accessible_resources": [
     {
       "resources": [
-        "engine/stockfish-19-lite-single.js",
-        "engine/stockfish-19-lite-single.wasm"
+        "engine/stockfish-19-single.js",
+        "engine/stockfish-19-single.wasm"
       ],
       "matches": [
         "https://www.chess.com/*",
