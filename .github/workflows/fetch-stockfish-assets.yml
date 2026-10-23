@@ -4,6 +4,7 @@ on:
     branches: [main]
     paths:
       - ".github/workflows/fetch-stockfish-assets.yml"
+      - ".gitattributes"
       - "js/board.js"
       - "js/background.js"
       - "js/popup.js"
