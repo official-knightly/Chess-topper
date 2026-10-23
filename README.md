@@ -1,42 +1,36 @@
 # Chess Topper — Analysis Bar (Manifest V3)
 
-Chess Topper adds an evaluation bar, best-move arrow, engine line, and analysis status to supported chess analysis/study/review pages. It is intended for analysis, puzzles, and post-game review—not live rated games.
+Chess Topper provides an evaluation bar, best-move arrow, principal variation, and server/local analysis choices on supported chess analysis, study, puzzle, and review pages. It is intended for analysis and post-game review—not live rated games.
 
 ## Install
 
 1. Download or clone this repository.
-2. Open `chrome://extensions` in desktop Chrome/Chromium and enable **Developer mode**.
-3. Select **Load unpacked** and choose this folder.
-4. Open a supported analysis/study/review page and open the extension popup.
+2. On desktop Chrome/Chromium, open `chrome://extensions`, enable **Developer mode**, and select **Load unpacked**.
+3. Choose this folder, then reload the chess analysis page.
+4. Open the extension popup and select the analysis source.
 
-## Choose the analysis source
+## Analysis source
 
-The popup offers three modes:
+- **Auto: server → WASM** — try the configured Stockfish API; on error or a 1-second timeout, switch to local Stockfish WASM.
+- **Local WASM** — analyze locally without a server request.
+- **Server only** — use the configured API only.
 
-- **Auto: server → WASM** — request server analysis; if it has not responded within 1 second or fails, switch to local WASM.
-- **Local WASM** — run the local Stockfish engine without calling the server.
-- **Server only** — use the remote Stockfish API and do not fall back to local.
+The API key is stored in `chrome.storage.local` for this browser profile. Do not commit or share it. Server analysis depends on API access, quota, and the API response schema.
 
-The Stockfish API key is stored in this browser profile's `chrome.storage.local`. Never commit or share the key. Remote depth is capped at 14.
+## Local engine files
 
-## Install the local WASM engine
+GitHub Actions downloads the official Stockfish.js 19.0.1 **lite single-threaded** distribution from [nmrugg/stockfish.js](https://github.com/nmrugg/stockfish.js/releases/tag/v19.0.1), verifies its published SHA-256 checksums and WASM magic bytes, and commits:
 
-The JavaScript loader is in `engine/stockfish-19-lite.js`. Local analysis also needs a **real, matching WASM binary** and the matching worker file:
+- `engine/stockfish-19-lite-single.js`
+- `engine/stockfish-19-lite-single.wasm`
 
-- `engine/stockfish.wasm`
-- `engine/stockfish.worker.js`
+The single-threaded build is intentional: it does not require cross-origin isolation headers that a browser extension cannot impose on chess.com, Lichess, or WorldChess pages. It is smaller than the full engine and does not use multiple CPU threads.
 
-If those files are missing from GitHub, add `assets/stockfish-wasm.zip`. It must contain the real `.wasm` file and its matching worker from the same Stockfish.js distribution. The files may be inside a folder in the ZIP. Push the ZIP to `main`; the **Install local Stockfish WASM assets** GitHub Actions workflow extracts, validates, and commits the engine files.
+Stockfish is GPLv3. Preserve upstream license/copyright notices and review the upstream release terms when redistributing.
 
-A valid WASM binary starts with bytes `00 61 73 6d`. A file starting with `version https://git-lfs.github.com/spec/v1` is only a Git LFS pointer, not the binary itself. Git LFS is configured for `.wasm` and `.zip` files.
+## Known limitations to test
 
-Preserve Stockfish's GPLv3 license and upstream copyright notices. The WASM and worker must match the JavaScript loader; renaming an unrelated binary is not sufficient.
+- Chess sites change their board DOM frequently; each supported site's analysis page must be tested in a real browser.
+- When the site does not expose its actual FEN, the fallback reader currently reconstructs piece placement only and assumes White to move, no castling rights, no en-passant square, and move counters `0 1`. That is not sufficient for exact analysis of arbitrary positions. Reliable full-position analysis requires reading the site's actual FEN or reconstructing it from the complete move history.
+- The remote API may return a different JSON shape than the parser expects. If server mode fails, check the extension status and the API's current documentation.
 
-## Current limitations
-
-- The repository's WASM binary and matching worker are **not currently present in GitHub**, so local fallback cannot be verified until the ZIP is added and the workflow succeeds.
-- Board layouts vary by site. Chess.com, Lichess, and WorldChess still need hands-on testing on each site's analysis pages.
-- When the page does not expose its actual FEN, the fallback board reader currently assumes White to move and does not infer castling rights, en-passant square, or move counters. This can make engine results incorrect for some positions; it must be fixed before treating the extension as reliable.
-- Remote response fields depend on the Stockfish API response schema and API availability.
-
-See the [Stockfish API reference](https://stockfishapi.com/docs/api/evaluatePosition).
