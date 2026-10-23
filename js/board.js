@@ -37,14 +37,14 @@
         const line=typeof e.data==='string'?e.data:'';
         if(line==='uciok'){state.uciReady=true;worker.postMessage('setoption name Threads value 2');worker.postMessage('isready');return;}
         if(line==='readyok'){state.ready=true;status(files.label+' ready');if(state.pendingFallbackFen||state.lastFen){const fen=state.pendingFallbackFen||state.lastFen;state.pendingFallbackFen='';analyse(fen);}return;}
-        const depth=line.match(/\\bdepth (\\d+)/); if(depth)state.depthLive=Number(depth[1]);
-        const cp=line.match(/\\bscore cp (-?\\d+)/);
-        const mate=line.match(/\\bscore mate (-?\\d+)/);
-        const pv=line.match(/\\bpv (.+)$/);
+        const depth=line.match(/\bdepth (\\d+)/); if(depth)state.depthLive=Number(depth[1]);
+        const cp=line.match(/\bscore cp (-?\\d+)/);
+        const mate=line.match(/\bscore mate (-?\\d+)/);
+        const pv=line.match(/\bpv (.+)$/);
         if(cp)updateScore(Number(cp[1]));
         if(mate){$('.ct-eval').textContent='Evaluation: Mate in '+mate[1];$('.ct-score').textContent='M'+mate[1]}
-        if(pv){state.pv=pv[1].trim();$('.ct-pv').textContent='Line: '+state.pv.split(/\\s+/).slice(0,7).join(' ')}
-        const bm=line.match(/\\bbestmove ([a-h][1-8][a-h][1-8][qrbn]?)/);
+        if(pv){state.pv=pv[1].trim();$('.ct-pv').textContent='Line: '+state.pv.split(/\s+/).slice(0,7).join(' ')}
+        const bm=line.match(/\bbestmove ([a-h][1-8][a-h][1-8][qrbn]?)/);
         if(bm){state.bestmove=bm[1];$('.ct-move').textContent='Best move: '+bm[1];drawArrow(bm[1]);status(files.label+' analysis ready · depth '+(state.depthLive||state.depth))}
       };
       worker.onerror=()=>{status(files.label+' failed to load. Check engine JS/WASM/worker files.');state.ready=false;state.engine=null;};
