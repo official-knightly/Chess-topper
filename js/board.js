@@ -39,9 +39,9 @@
         if(line==='readyok'){state.ready=true;status(files.label+' ready');if(state.pendingFallbackFen||state.lastFen){const fen=state.pendingFallbackFen||state.lastFen;state.pendingFallbackFen='';analyse(fen);}return;}
         if(state.analysisMode!=='wasm'&&!state.localFallbackActive)return;
         if(state.localSearchFen&&state.localSearchFen!==state.lastFen)return;
-        const depth=line.match(/\bdepth (\\d+)/); if(depth)state.depthLive=Number(depth[1]);
-        const cp=line.match(/\bscore cp (-?\\d+)/);
-        const mate=line.match(/\bscore mate (-?\\d+)/);
+        const depth=line.match(/\bdepth (\d+)/); if(depth)state.depthLive=Number(depth[1]);
+        const cp=line.match(/\bscore cp (-?\d+)/);
+        const mate=line.match(/\bscore mate (-?\d+)/);
         const pv=line.match(/\bpv (.+)$/);
         if(cp)updateScore(Number(cp[1]));
         if(mate){$('.ct-eval').textContent='Evaluation: Mate in '+mate[1];$('.ct-score').textContent='M'+mate[1]}
