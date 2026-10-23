@@ -19,14 +19,14 @@ The API key is optional because the API allows limited keyless requests. If supp
 
 ## Local engine
 
-GitHub Actions downloads the official Stockfish.js 19.0.1 **lite single-threaded** release, verifies published SHA-256 checksums and WASM magic bytes, then commits:
+GitHub Actions downloads the official Stockfish.js 19.0.1 **full single-threaded** release, verifies published SHA-256 checksums and WASM magic bytes, then commits:
 
-- `engine/stockfish-19-lite-single.js`
-- `engine/stockfish-19-lite-single.wasm`
+- `engine/stockfish-19-single.js`
+- `engine/stockfish-19-single.wasm`
 
-The single-threaded build avoids the cross-origin isolation requirement that the multithreaded build would impose on chess sites. The WASM file is stored using Git LFS; GitHub's source view may show an LFS pointer, but the workflow log confirms the actual 1.8 MB binary was uploaded to LFS and verified.
+The full single-threaded build uses Stockfish's full neural network and avoids the cross-origin isolation requirement that would prevent multithreaded builds from running on many third-party chess sites. The WASM file is large (about 90+ MB) and is stored using Git LFS.
 
-The previous `engine/stockfish-19-lite.js` file is a multithreaded loader and is **not used** by the current manifest. Do not substitute it for the single-threaded pair.
+The matching `engine/stockfish-19-single.js` and `engine/stockfish-19-single.wasm` files must always be kept together.
 
 Stockfish is GPLv3. Preserve upstream license and copyright notices when redistributing.
 
@@ -36,7 +36,7 @@ Stockfish is GPLv3. Preserve upstream license and copyright notices when redistr
 - `html/popup.html`, `js/popup.js`, `css/popup.css` — settings popup
 - `js/board.js`, `css/style.css` — analysis overlay and board reader
 - `js/background.js` — server API requests and timeout
-- `engine/stockfish-19-lite-single.js` + `.wasm` — local Stockfish engine
+- `engine/stockfish-19-single.js` + `.wasm` — local Stockfish engine
 - `scripts/smoke-stockfish.mjs` — CI test that starts the engine and requests a move
 
 ## Known limitations
@@ -54,6 +54,6 @@ Stockfish is GPLv3. Preserve upstream license and copyright notices when redistr
 
 ## Engine and arrow behavior
 
-The local fallback uses the official **Stockfish.js 19 Lite single-threaded** JS/WASM pair. It is deliberately compact and does not require cross-origin isolation, but it is weaker than the full Stockfish 19 build. The full multi-threaded build can use multiple CPU threads but needs cross-origin isolation (`SharedArrayBuffer`); the full single-threaded build avoids that requirement at the cost of using one thread. A `.wasm` filename alone does not identify the strength—the matching JavaScript loader and WASM file must come from the same distribution variant.
+The local engine uses the official **Stockfish.js 19 full single-threaded** JS/WASM pair, including the full neural network. It does not require cross-origin isolation, so it is compatible with more third-party chess sites. It uses one CPU thread; the full multithreaded build can use multiple threads only when `SharedArrayBuffer` and cross-origin isolation are available. The full engine is roughly 94 MB combined, so its first load takes longer and uses more storage. A `.wasm` filename alone does not identify the strength—the matching JavaScript loader and WASM file must come from the same distribution variant.
 
 The best-move arrow accounts for black-side board orientation and the Chess.com `wc-chess-board` element, keeps its position current after scrolling/resizing, and offsets its arrowhead so it does not sit directly over the destination piece. Server requests have a longer timeout before Auto mode falls back to local WASM.
