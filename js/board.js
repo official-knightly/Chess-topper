@@ -29,13 +29,13 @@
   function updateScore(cp){state.score=cp;const pawns=cp/100,clamped=Math.max(-10,Math.min(10,pawns));$('.ct-white').style.height=(50+clamped*4.5)+'%';const txt=(pawns>0?'+':'')+pawns.toFixed(1);$('.ct-score').textContent=txt;$('.ct-eval').textContent='Evaluation: '+txt}
   function bootEngine(){
     if(state.engine||!supportedAnalysisPath())return;
-    const files={js:'engine/stockfish-19-lite.js',label:'Stockfish 19 Lite'};
+    const files={js:'engine/stockfish-19-lite-single.js',label:'Stockfish 19 Lite'};
     try {
       const worker=new Worker(chrome.runtime.getURL(files.js));
       state.engine=worker;
       worker.onmessage=e=>{
         const line=typeof e.data==='string'?e.data:'';
-        if(line==='uciok'){state.uciReady=true;worker.postMessage('setoption name Threads value 2');worker.postMessage('isready');return;}
+        if(line==='uciok'){state.uciReady=true;worker.postMessage('setoption name Threads value 1');worker.postMessage('isready');return;}
         if(line==='readyok'){state.ready=true;status(files.label+' ready');if(state.pendingFallbackFen||state.lastFen){const fen=state.pendingFallbackFen||state.lastFen;state.pendingFallbackFen='';analyse(fen);}return;}
         if(state.analysisMode!=='wasm'&&!state.localFallbackActive)return;
         if(state.localSearchFen&&state.localSearchFen!==state.lastFen)return;
