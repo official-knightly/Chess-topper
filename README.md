@@ -19,7 +19,7 @@ The API key is optional because the API allows limited keyless requests. If supp
 
 ## Local engine
 
-GitHub Actions downloads the official Stockfish.js 19.0.1 **full single-threaded** release, verifies published SHA-256 checksums and WASM magic bytes, then commits:
+GitHub Actions downloads the official Stockfish.js 19.0.1 **full single-threaded** release, verifies WASM magic bytes, expected full-engine size, and a UCI smoke test, then commits:
 
 - `engine/stockfish-19-single.js`
 - `engine/stockfish-19-single.wasm`
