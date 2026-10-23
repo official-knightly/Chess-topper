@@ -11,26 +11,42 @@ Chess Topper provides an evaluation bar, best-move arrow, principal variation, a
 
 ## Analysis source
 
-- **Auto: server → WASM** — try the configured Stockfish API; on error or a 1-second timeout, switch to local Stockfish WASM.
+- **Auto: server → WASM** — try the Stockfish API; if it errors or does not respond within 1 second, switch to local Stockfish WASM.
 - **Local WASM** — analyze locally without a server request.
-- **Server only** — use the configured API only.
+- **Server only** — use the remote API only.
 
-The API key is stored in `chrome.storage.local` for this browser profile. Do not commit or share it. Server analysis depends on API access, quota, and the API response schema.
+The API key is optional because the API allows limited keyless requests. If supplied, it is stored in `chrome.storage.local` for this browser profile. Do not commit or share it. Remote results are parsed from the current API's `eval`, `bestmove`, and `pvs` response fields. API availability and quotas still apply.
 
-## Local engine files
+## Local engine
 
-GitHub Actions downloads the official Stockfish.js 19.0.1 **lite single-threaded** distribution from [nmrugg/stockfish.js](https://github.com/nmrugg/stockfish.js/releases/tag/v19.0.1), verifies its published SHA-256 checksums and WASM magic bytes, and commits:
+GitHub Actions downloads the official Stockfish.js 19.0.1 **lite single-threaded** release, verifies published SHA-256 checksums and WASM magic bytes, then commits:
 
 - `engine/stockfish-19-lite-single.js`
 - `engine/stockfish-19-lite-single.wasm`
 
-The single-threaded build is intentional: it does not require cross-origin isolation headers that a browser extension cannot impose on chess.com, Lichess, or WorldChess pages. It is smaller than the full engine and does not use multiple CPU threads.
+The single-threaded build avoids the cross-origin isolation requirement that the multithreaded build would impose on chess sites. The WASM file is stored using Git LFS; GitHub's source view may show an LFS pointer, but the workflow log confirms the actual 1.8 MB binary was uploaded to LFS and verified.
 
-Stockfish is GPLv3. Preserve upstream license/copyright notices and review the upstream release terms when redistributing.
+The previous `engine/stockfish-19-lite.js` file is a multithreaded loader and is **not used** by the current manifest. Do not substitute it for the single-threaded pair.
 
-## Known limitations to test
+Stockfish is GPLv3. Preserve upstream license and copyright notices when redistributing.
 
-- Chess sites change their board DOM frequently; each supported site's analysis page must be tested in a real browser.
-- When the site does not expose its actual FEN, the fallback reader currently reconstructs piece placement only and assumes White to move, no castling rights, no en-passant square, and move counters `0 1`. That is not sufficient for exact analysis of arbitrary positions. Reliable full-position analysis requires reading the site's actual FEN or reconstructing it from the complete move history.
-- The remote API may return a different JSON shape than the parser expects. If server mode fails, check the extension status and the API's current documentation.
+## Project layout
 
+- `manifest.json` — extension manifest and engine resource permissions
+- `html/popup.html`, `js/popup.js`, `css/popup.css` — settings popup
+- `js/board.js`, `css/style.css` — analysis overlay and board reader
+- `js/background.js` — server API requests and timeout
+- `engine/stockfish-19-lite-single.js` + `.wasm` — local Stockfish engine
+- `scripts/smoke-stockfish.mjs` — CI test that starts the engine and requests a move
+
+## Known limitations
+
+- The engine itself now passes a real UCI smoke test in GitHub Actions, but browser-level testing on each chess site is still needed.
+- The extension only activates on analysis/study/review/puzzle-style URL paths; site URL patterns and board DOM may change.
+- The reader prefers a site's native FEN when exposed. Otherwise it estimates FEN from piece DOM. That fallback cannot reliably recover castling rights or en-passant state and may not know whose turn it is; the panel labels those positions as estimated. Do not trust estimated-FEN results for exact game analysis.
+- Server requests time out after 1 second by design. Slow servers will cause local fallback even if they might eventually respond.
+
+## References
+
+- [Stockfish API evaluation endpoint](https://stockfishapi.com/docs/api/evaluatePosition)
+- [Official Stockfish.js 19.0.1 release](https://github.com/nmrugg/stockfish.js/releases/tag/v19.0.1)
