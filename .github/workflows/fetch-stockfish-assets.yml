@@ -47,7 +47,9 @@ jobs:
           js_size="$(wc -c < engine/stockfish-19-single.js)"
           wasm_size="$(wc -c < engine/stockfish-19-single.wasm)"
           test "$js_size" -gt 10000000 || { echo "Full engine JS is unexpectedly small"; exit 1; }
-          test "$wasm_size" -gt 10000000 || { echo "Full engine WASM is unexpectedly small"; exit 1; }
+          test "$wasm_size" -gt 1000000 || { echo "Full engine WASM is unexpectedly small"; exit 1; }
+          total_size=$((js_size + wasm_size))
+          test "$total_size" -gt 80000000 || { echo "Full engine pair is unexpectedly small"; exit 1; }
           test "$js_size" -lt 100000000 || { echo "Full engine JS exceeds GitHub's normal file-size limit"; exit 1; }
           grep -q "Stockfish" engine/stockfish-19-single.js
           echo "Validated official full Stockfish 19 assets (JS: $js_size bytes; WASM: $wasm_size bytes)."
