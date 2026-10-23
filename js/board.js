@@ -1,7 +1,7 @@
 (() => {
   if (window.__chessTopperLoaded) return; window.__chessTopperLoaded = true;
   const supportedAnalysisPath = () => /\/(analysis|study|review|game-review|puzzle)(\/|$)/i.test(location.pathname) || /analysis|study|review/i.test(location.search);
-  const state = {bar:true, arrow:true, depth:12, engineName:'stockfish', score:0, bestmove:null, engine:null, ready:false, lastFen:'', board:null, pv:'', uciReady:false};
+  const state = {bar:true, arrow:true, depth:12, engineName:'stockfish', score:0, bestmove:null, engine:null, ready:false, lastFen:'', board:null, pv:'', uciReady:false, remoteSeq:0, remoteBusy:false, remoteLastFen:'', remoteFailed:false};
   const files='abcdefgh';
   const panel=document.createElement('div'); panel.id='chess-topper-panel'; panel.innerHTML='<div class="ct-bar"><div class="ct-white"></div><div class="ct-score">0.0</div></div><div class="ct-card"><div class="ct-title">♞ Chess Topper</div><div class="ct-line ct-engine">Engine: Stockfish 19 Lite</div><div class="ct-line ct-move">Best move: —</div><div class="ct-line ct-eval">Evaluation: —</div><div class="ct-line ct-pv">Line: —</div><div class="ct-status">Looking for an analysis board…</div><button class="ct-toggle">Hide</button></div>';
   const arrowSvg=document.createElementNS('http://www.w3.org/2000/svg','svg'); arrowSvg.id='chess-topper-arrow'; arrowSvg.setAttribute('viewBox',`0 0 ${innerWidth} ${innerHeight}`); arrowSvg.setAttribute('preserveAspectRatio','none'); arrowSvg.innerHTML='<defs><marker id="ct-head" markerWidth="7" markerHeight="7" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 z" fill="#12a66a"/></marker></defs><line id="ct-line" x1="0" y1="0" x2="0" y2="0" stroke="#12a66a" stroke-width="9" stroke-linecap="round" marker-end="url(#ct-head)" opacity=".88"/>';
@@ -38,7 +38,7 @@
       worker.onmessage=e=>{
         const line=typeof e.data==='string'?e.data:'';
         if(line==='uciok'){state.uciReady=true;worker.postMessage('setoption name Threads value 2');worker.postMessage('isready');return;}
-        if(line==='readyok'){state.ready=true;status(files.label+' ready');if(state.lastFen)analyse(state.lastFen);return;}
+        if(line==='readyok'){state.ready=true;status(files.label+' ready');if(state.pendingFallbackFen||state.lastFen){const fen=state.pendingFallbackFen||state.lastFen;state.pendingFallbackFen='';analyse(fen);}return;}
         const depth=line.match(/\\bdepth (\\d+)/); if(depth)state.depthLive=Number(depth[1]);
         const cp=line.match(/\\bscore cp (-?\\d+)/);
         const mate=line.match(/\\bscore mate (-?\\d+)/);
@@ -55,6 +55,58 @@
     } catch(err) {status('Could not start '+files.label+'.');}
   }
   function analyse(fen){if(!state.engine||!fen)return;state.lastFen=fen;state.engine.postMessage('stop');state.engine.postMessage('position fen '+fen);state.engine.postMessage('go depth '+state.depth)}
-  function scan(){if(!supportedAnalysisPath()){status('Open analysis, study, or review mode to use Chess Topper.');return}const p=readPosition();if(!p){status('Waiting for a readable analysis board…');return}if(!state.engine)bootEngine();if(p.fen!==state.lastFen){state.lastFen=p.fen;if(state.engine&&state.ready)analyse(p.fen)}}
+    function readRemoteScore(data){
+    let value = data?.eval ?? data?.evaluation ?? data?.score;
+    if(value && typeof value==='object'){
+      if(Number.isFinite(value.cp)) return {cp:value.cp, mate:null};
+      if(Number.isFinite(value.mate)) return {cp:null, mate:value.mate};
+      if(Number.isFinite(value.value)) value=value.value;
+    }
+    if(typeof value==='number' && Number.isFinite(value)) return {cp:Math.abs(value)>100 ? value : value*100, mate:null};
+    if(Number.isFinite(data?.cp)) return {cp:data.cp, mate:null};
+    if(Number.isFinite(data?.mate)) return {cp:null, mate:data.mate};
+    return null;
+  }
+  function remotePv(data){
+    const candidate=data?.pv ?? data?.bestline ?? data?.line ?? data?.principal_variation ?? data?.pvs?.[0]?.pv ?? data?.lines?.[0]?.pv;
+    if(Array.isArray(candidate)) return candidate.join(' ');
+    if(typeof candidate==='string') return candidate;
+    if(Array.isArray(data?.pvs) && typeof data.pvs[0]==='string') return data.pvs[0];
+    return '';
+  }
+  async function remoteAnalyse(fen){
+    const seq=++state.remoteSeq;
+    state.remoteLastFen=fen;
+    state.remoteBusy=true;
+    status('Requesting server Stockfish…');
+    try {
+      const result=await chrome.runtime.sendMessage({type:'CT_REMOTE_ANALYZE',fen,depth:Math.min(14,Math.max(1,state.depth)),multipv:2});
+      if(seq!==state.remoteSeq || fen!==state.lastFen)return;
+      if(!result?.ok) throw new Error(result?.error||'Server analysis failed');
+      const data=result.data||{};
+      const best=String(data.bestmove||data.best_move||data.move||'').trim().split(/\s+/)[0];
+      if(!/^[a-h][1-8][a-h][1-8][qrbn]?$/i.test(best)) throw new Error('API response did not include a valid best move');
+      const score=readRemoteScore(data);
+      if(score?.cp!==null && score?.cp!==undefined) updateScore(score.cp);
+      else if(score?.mate!==null && score?.mate!==undefined){$('.ct-eval').textContent='Evaluation: Mate in '+score.mate;$('.ct-score').textContent='M'+score.mate}
+      state.bestmove=best;
+      const pv=remotePv(data)||best;
+      state.pv=pv;
+      $('.ct-move').textContent='Best move: '+best;
+      $('.ct-pv').textContent='Line: '+pv.split(/\s+/).slice(0,7).join(' ');
+      drawArrow(best);
+      status('Server Stockfish ready · depth '+(data.depth||Math.min(14,state.depth)));
+      state.remoteFailed=false;
+    } catch(error) {
+      if(seq!==state.remoteSeq || fen!==state.lastFen)return;
+      state.remoteFailed=true;
+      status('Server slow/unavailable; switching to local WASM…');
+      if(!state.engine)bootEngine();
+      if(state.engine){if(state.ready)analyse(fen);else state.pendingFallbackFen=fen;}
+    } finally {
+      if(seq===state.remoteSeq)state.remoteBusy=false;
+    }
+  }
+function scan(){if(!supportedAnalysisPath()){status('Open analysis, study, or review mode to use Chess Topper.');return}const p=readPosition();if(!p){status('Waiting for a readable analysis board…');return}if(p.fen!==state.lastFen){state.lastFen=p.fen;state.bestmove=null;arrowSvg.querySelector('#ct-line').setAttribute('opacity','0');if(state.engineName==='stockfish'){remoteAnalyse(p.fen)}else{if(!state.engine)bootEngine();if(state.engine&&state.ready)analyse(p.fen)}}}
   setInterval(scan,1400);window.addEventListener('resize',()=>state.bestmove&&drawArrow(state.bestmove));
 })();
