@@ -55,6 +55,6 @@
     } catch(err) {status('Could not start '+files.label+'.');}
   }
   function analyse(fen){if(!state.engine||!fen)return;state.lastFen=fen;state.engine.postMessage('stop');state.engine.postMessage('position fen '+fen);state.engine.postMessage('go depth '+state.depth)}
-  function scan(){if(!supportedAnalysisPath()){status('Open analysis, study, or review mode to use Chess Topper.');return}const p=readPosition();if(!p){status('Waiting for a readable analysis board…');return}bootEngine();if(p.fen!==state.lastFen)analyse(p.fen);}
+  function scan(){if(!supportedAnalysisPath()){status('Open analysis, study, or review mode to use Chess Topper.');return}const p=readPosition();if(!p){status('Waiting for a readable analysis board…');return}if(!state.engine)bootEngine();if(p.fen!==state.lastFen){state.lastFen=p.fen;if(state.engine&&state.ready)analyse(p.fen)}}
   setInterval(scan,1400);window.addEventListener('resize',()=>state.bestmove&&drawArrow(state.bestmove));
 })();
