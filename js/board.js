@@ -96,7 +96,7 @@
   function updateScore(cp){state.score=cp;const pawns=cp/100,clamped=Math.max(-10,Math.min(10,pawns));$('.ct-white').style.height=(50+clamped*4.5)+'%';const txt=(pawns>0?'+':'')+pawns.toFixed(1);$('.ct-score').textContent=txt;$('.ct-eval').textContent='Evaluation: '+txt}
   function bootEngine(){
     if(state.engine||!supportedAnalysisPath())return;
-    const files={js:'engine/stockfish-19-lite-single.js',label:'Stockfish 19 Lite'};
+    const files={js:'engine/stockfish-19-single.js',label:'Stockfish 19 Full'};
     try {
       const worker=new Worker(chrome.runtime.getURL(files.js));
       state.engine=worker;
