@@ -182,6 +182,18 @@
       if(seq===state.remoteSeq)state.remoteBusy=false;
     }
   }
-function scan(){if(!supportedAnalysisPath()){status('Open analysis, study, or review mode to use Chess Topper.');return}const p=readPosition();if(!p){status('Waiting for a readable analysis board…');return}$('.ct-position').textContent=p.fenComplete?'Position: site FEN':'Position: estimated'+(p.turnKnown?' (castling/en-passant unknown)':' (turn/castling/en-passant unknown)');if(p.fen!==state.lastFen){state.lastFen=p.fen;state.bestmove=null;state.pv='';arrowSvg.querySelector('#ct-line').setAttribute('opacity','0');if(state.analysisMode==='wasm'){if(!state.engine)bootEngine();if(state.engine&&state.ready)analyse(p.fen);else state.pendingFallbackFen=p.fen;}else{remoteAnalyse(p.fen)}}else if(state.bestmove){drawArrow(state.bestmove);}}
-  setInterval(scan,1400);window.addEventListener('resize',()=>state.bestmove&&drawArrow(state.bestmove));window.addEventListener('scroll',()=>state.bestmove&&drawArrow(state.bestmove),true);window.visualViewport?.addEventListener('resize',()=>state.bestmove&&drawArrow(state.bestmove));
+let observedBoard=null,boardResizeObserver=null;
+  function observeBoard(board){
+    if(!board||board===observedBoard)return;
+    observedBoard=board;
+    if(boardResizeObserver)boardResizeObserver.disconnect();
+    if(typeof ResizeObserver==='function'){
+      boardResizeObserver=new ResizeObserver(()=>{
+        if(state.bestmove&&state.board===observedBoard)drawArrow(state.bestmove);
+      });
+      boardResizeObserver.observe(board);
+    }
+  }
+  function scan(){if(!supportedAnalysisPath()){status('Open analysis, study, or review mode to use Chess Topper.');return}const p=readPosition();observeBoard(p?.board);if(!p){status('Waiting for a readable analysis board…');return}$('.ct-position').textContent=p.fenComplete?'Position: site FEN':'Position: estimated'+(p.turnKnown?' (castling/en-passant unknown)':' (turn/castling/en-passant unknown)');if(p.fen!==state.lastFen){state.lastFen=p.fen;state.bestmove=null;state.pv='';arrowSvg.querySelector('#ct-line').setAttribute('opacity','0');if(state.analysisMode==='wasm'){if(!state.engine)bootEngine();if(state.engine&&state.ready)analyse(p.fen);else state.pendingFallbackFen=p.fen;}else{remoteAnalyse(p.fen)}}else if(state.bestmove){drawArrow(state.bestmove);}}
+  setInterval(scan,1400);window.addEventListener('resize',()=>state.bestmove&&drawArrow(state.bestmove));window.addEventListener('scroll',()=>state.bestmove&&drawArrow(state.bestmove),true);window.visualViewport?.addEventListener('resize',()=>state.bestmove&&drawArrow(state.bestmove));window.visualViewport?.addEventListener('scroll',()=>state.bestmove&&drawArrow(state.bestmove));window.addEventListener('orientationchange',()=>state.bestmove&&drawArrow(state.bestmove));
 })();
