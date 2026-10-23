@@ -1,0 +1,2 @@
+# Store large Stockfish WebAssembly binaries with Git LFS
+*.wasm filter=lfs diff=lfs merge=lfs -text
