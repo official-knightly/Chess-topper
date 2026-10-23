@@ -41,3 +41,10 @@ These files are not yet present, so engine analysis cannot run until matching as
 - Board DOM layouts vary; Chess.com, Lichess, and WorldChess layouts have not yet been fully tested.
 - FEN extraction currently assumes White to move and does not infer castling rights, en-passant target, or move counters. Treat it as a prototype until verified against known positions.
 - The extension is restricted by code to analysis/study/review/puzzle URL patterns; site-specific path handling still needs testing.
+
+
+## Server-first Stockfish analysis
+
+The extension can request evaluations from `https://stockfishapi.com/v1/eval` first. In the extension popup, paste a **newly rotated** API key and apply settings. The key is stored in this browser profile's `chrome.storage.local`; it is not embedded in source files. Do not commit or share the key. The API free tier supports depth up to 14, so remote requests cap depth at 14. If a server request fails or times out, Chess Topper tries its local Stockfish worker.
+
+The local fallback still requires matching Stockfish JS/WASM assets in `engine/`; those assets are not included in this repository at present, so fallback will not work until they are added. API access and quotas are controlled by Stockfish API. See [API reference](https://stockfishapi.com/docs/api/evaluatePosition).
