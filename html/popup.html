@@ -10,7 +10,7 @@
   <main>
     <div class="brand"><span class="knight">♞</span><div><b>Chess Topper</b><small>Local chess analysis</small></div></div>
     <div class="notice">Use for analysis, puzzles, and post-game review—not during live rated games.</div>
-    <label class="row"><span>Engine</span><select id="engine"><option value="stockfish">Stockfish 19 Lite</option><option value="andromeda">Andromeda</option></select></label>
+    <label class="row"><span>Analysis source</span><select id="analysisMode"><option value="auto">Auto: server → WASM</option><option value="wasm">Local WASM</option><option value="server">Server only</option></select></label>
     <label class="switchrow"><span>Show evaluation bar</span><input id="bar" type="checkbox" checked></label>
     <label class="switchrow"><span>Show best-move arrow</span><input id="arrow" type="checkbox" checked></label>
     <label class="row"><span>Stockfish API key</span><input id="apiKey" type="password" autocomplete="off" placeholder="Paste rotated key" style="width:145px;min-width:0"></label>
