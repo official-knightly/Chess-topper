@@ -1,16 +1,7 @@
 # Assets
 
-This folder stores extension assets and the optional local-engine archive.
+The local engine is downloaded automatically by the GitHub Actions workflow from the official Stockfish.js release. You do not need to upload a ZIP manually.
 
-## Add the Stockfish WASM archive
+Workflow: [Install and verify local Stockfish WASM](../.github/workflows/fetch-stockfish-assets.yml)
 
-If `engine/stockfish.wasm` is not present in GitHub, upload a file named **`stockfish-wasm.zip`** into this folder. The ZIP must contain the real `.wasm` binary and its matching `stockfish.worker.js` from the **same Stockfish.js build**. The files may be inside a subfolder in the ZIP.
-
-After pushing `assets/stockfish-wasm.zip`, GitHub Actions will extract the files, verify the WASM magic bytes, and commit the usable files as:
-
-- `engine/stockfish.wasm`
-- `engine/stockfish.worker.js`
-
-Do not ZIP a Git LFS pointer text file in place of the actual binary. A real WASM file starts with bytes `00 61 73 6d`.
-
-Keep the Stockfish GPLv3 license and copyright notices with the matching distribution. Use the extension only for analysis, study, puzzles, and post-game review—not live rated games.
+It installs the matching single-threaded JS and WASM pair in `engine/`, verifies SHA-256 checksums and the WASM magic bytes, then commits the files with Git LFS handling for `.wasm`.
