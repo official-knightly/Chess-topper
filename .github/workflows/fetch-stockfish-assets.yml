@@ -1,10 +1,11 @@
-name: Install local Stockfish WASM assets
+name: Install and verify local Stockfish WASM
 on:
   push:
     branches: [main]
     paths:
       - ".github/workflows/fetch-stockfish-assets.yml"
-      - "assets/stockfish-wasm.zip"
+      - "js/board.js"
+      - "manifest.json"
   workflow_dispatch:
 permissions:
   contents: write
@@ -20,50 +21,31 @@ jobs:
           ref: main
           lfs: true
           persist-credentials: true
-      - name: Extract matching local engine files
+      - name: Download official Stockfish.js 19 lite single-threaded release
         shell: bash
         run: |
           set -euo pipefail
-          git lfs install
-          if [ ! -s assets/stockfish-wasm.zip ]; then
-            echo "::notice::Local engine assets are not installed yet. Add assets/stockfish-wasm.zip with the matching WASM and worker files to trigger installation."
-            exit 0
-          fi
-          rm -rf /tmp/stockfish-zip
-          mkdir -p /tmp/stockfish-zip engine
-          unzip -q assets/stockfish-wasm.zip -d /tmp/stockfish-zip
-          wasm=""
-          for name in stockfish-19-lite.wasm stockfish.wasm stockfish-19.wasm; do
-            wasm="$(find /tmp/stockfish-zip -type f -name "$name" -print -quit)"
-            if [ -n "$wasm" ]; then break; fi
-          done
-          test -n "$wasm" && test -s "$wasm" || {
-            echo "ZIP contains no recognized Stockfish WASM file."
-            exit 1
-          }
-          worker="$(find /tmp/stockfish-zip -type f \( -name 'stockfish.worker.js' -o -name 'stockfish-19-lite.worker.js' \) -print -quit)"
-          test -n "$worker" && test -s "$worker" || {
-            echo "ZIP is missing the matching stockfish.worker.js file. Include the worker from the same Stockfish.js build."
-            exit 1
-          }
-          cp "$wasm" engine/stockfish.wasm
-          cp "$worker" engine/stockfish.worker.js
-          magic="$(head -c 4 engine/stockfish.wasm | od -An -tx1 | tr -d ' \n')"
-          test "$magic" = "0061736d" || {
-            echo "The extracted file is not a real WASM binary (it may be an LFS pointer)."
-            exit 1
-          }
-          echo "WASM bytes: $(wc -c < engine/stockfish.wasm)"
+          mkdir -p engine
+          base="https://github.com/nmrugg/stockfish.js/releases/download/v19.0.1"
+          curl --fail --location --retry 3 --retry-delay 2 "$base/stockfish-19-lite-single.js" --output engine/stockfish-19-lite-single.js
+          curl --fail --location --retry 3 --retry-delay 2 "$base/stockfish-19-lite-single.wasm" --output engine/stockfish-19-lite-single.wasm
+          echo "ccb130d7ff29408531c47d859a49f91d59d4f482d05a53eb1a3231a4f624c91a  engine/stockfish-19-lite-single.js" | sha256sum --check
+          echo "ee4f115bdb2d32cadf96cada104a05b5ec257d7ad6f57582190b49bc71f096de  engine/stockfish-19-lite-single.wasm" | sha256sum --check
+          magic="$(head -c 4 engine/stockfish-19-lite-single.wasm | od -An -tx1 | tr -d ' \n')"
+          test "$magic" = "0061736d" || { echo "Invalid WASM magic bytes"; exit 1; }
+          test "$(wc -c < engine/stockfish-19-lite-single.wasm)" -gt 1000000
+          grep -q "Stockfish" engine/stockfish-19-lite-single.js
+          echo "Validated official Stockfish.js 19 lite single-threaded assets."
       - name: Commit engine assets
         shell: bash
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add engine/stockfish.wasm engine/stockfish.worker.js
+          git add engine/stockfish-19-lite-single.js engine/stockfish-19-lite-single.wasm
           if git diff --cached --quiet; then
-            echo "Engine assets are already current."
+            echo "Verified Stockfish assets are already current."
             exit 0
           fi
-          git commit -m "Add local Stockfish WASM assets"
+          git commit -m "Add verified Stockfish 19 lite single-threaded WASM"
           git push
