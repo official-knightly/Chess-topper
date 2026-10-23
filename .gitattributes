@@ -3,3 +3,7 @@
 
 # Optional source archive for the matching local Stockfish distribution
 *.zip filter=lfs diff=lfs merge=lfs -text
+
+# Keep the full single-threaded engine binary in Git itself (99 MB, below GitHub's 100 MB file limit).
+# Other WASM assets remain under LFS.
+engine/stockfish-19-single.wasm -filter -diff -merge -text
