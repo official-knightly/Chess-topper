@@ -43,7 +43,11 @@ These files are not yet present, so engine analysis cannot run until matching as
 - The extension is restricted by code to analysis/study/review/puzzle URL patterns; site-specific path handling still needs testing.
 
 
-## Server-first Stockfish analysis
+## Server and local analysis modes
+
+The popup offers three modes: **Auto** tries the Stockfish API for up to 1 second and then starts local WASM; **Local WASM** never calls the server; **Server only** does not fall back. The API key is stored in this browser profile's `chrome.storage.local`; never commit or share it. Remote depth is capped at 14. The server response schema and local engine assets must match the actual service/build to produce valid results.
+
+The extension is intended for analysis, study, puzzles, and post-game review—not live rated games. See the [Stockfish API reference](https://stockfishapi.com/docs/api/evaluatePosition).
 
 The extension can request evaluations from `https://stockfishapi.com/v1/eval` first. In the extension popup, paste a **newly rotated** API key and apply settings. The key is stored in this browser profile's `chrome.storage.local`; it is not embedded in source files. Do not commit or share the key. The API free tier supports depth up to 14, so remote requests cap depth at 14. If a server request fails or times out, Chess Topper tries its local Stockfish worker.
 
