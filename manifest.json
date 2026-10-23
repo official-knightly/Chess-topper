@@ -44,10 +44,7 @@
       "resources": [
         "engine/stockfish-19-lite.js",
         "engine/stockfish.wasm",
-        "engine/stockfish.worker.js",
-        "engine/andromeda.js",
-        "engine/andromeda.wasm",
-        "engine/andromeda.worker.js"
+        "engine/stockfish.worker.js"
       ],
       "matches": [
         "https://www.chess.com/*",
