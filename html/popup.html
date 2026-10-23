@@ -13,6 +13,8 @@
     <label class="row"><span>Engine</span><select id="engine"><option value="stockfish">Stockfish 19 Lite</option><option value="andromeda">Andromeda</option></select></label>
     <label class="switchrow"><span>Show evaluation bar</span><input id="bar" type="checkbox" checked></label>
     <label class="switchrow"><span>Show best-move arrow</span><input id="arrow" type="checkbox" checked></label>
+    <label class="row"><span>Stockfish API key</span><input id="apiKey" type="password" autocomplete="off" placeholder="Paste rotated key" style="width:145px;min-width:0"></label>
+    <small class="keyhint">Stored only in this browser profile; never commit your key.</small>
     <label class="row"><span>Analysis depth</span><select id="depth"><option value="8">Quick · 8</option><option value="12" selected>Normal · 12</option><option value="16">Deep · 16</option></select></label>
     <button id="apply">Apply to this tab</button>
     <p id="status" role="status">Ready</p>
