@@ -42,7 +42,7 @@ jobs:
           base="https://github.com/nmrugg/stockfish.js/releases/download/v19.0.1"
           curl --fail --location --retry 3 --retry-delay 2 "$base/stockfish-19-single.js" --output engine/stockfish-19-single.js
           curl --fail --location --retry 3 --retry-delay 2 "$base/stockfish-19-single.wasm" --output engine/stockfish-19-single.wasm
-          magic="$(head -c 4 engine/stockfish-19-single.wasm | od -An -tx1 | tr -d ' \\n')"
+          magic="$(head -c 4 engine/stockfish-19-single.wasm | od -An -tx1 | tr -d '[:space:]')"
           test "$magic" = "0061736d" || { echo "Invalid WASM magic bytes"; exit 1; }
           js_size="$(wc -c < engine/stockfish-19-single.js)"
           wasm_size="$(wc -c < engine/stockfish-19-single.wasm)"
