@@ -1,3 +1,41 @@
-const ids=['bar','arrow','depth'];
-chrome.storage.local.get({bar:true,arrow:true,depth:12},v=>{for(const id of ids)document.getElementById(id).value!==undefined&&(document.getElementById(id).type==='checkbox'?document.getElementById(id).checked=!!v[id]:document.getElementById(id).value=String(v[id]));});
-document.getElementById('apply').addEventListener('click',async()=>{const settings={bar:document.getElementById('bar').checked,arrow:document.getElementById('arrow').checked,depth:Number(document.getElementById('depth').value)};await chrome.storage.local.set(settings);const [tab]=await chrome.tabs.query({active:true,currentWindow:true});if(tab?.id){try{await chrome.tabs.sendMessage(tab.id,{type:'CHESS_TOPPER_SETTINGS',settings});document.getElementById('status').textContent='Settings applied.'}catch{document.getElementById('status').textContent='Open a supported chess analysis page first.'}}});
+const ids = ["engine", "bar", "arrow", "depth"];
+const statusEl = document.getElementById("status");
+
+function setStatus(message) {
+  statusEl.textContent = message;
+}
+
+chrome.storage.local.get(
+  { engine: "stockfish", bar: true, arrow: true, depth: 12 },
+  (settings) => {
+    document.getElementById("engine").value = settings.engine || "stockfish";
+    document.getElementById("bar").checked = settings.bar !== false;
+    document.getElementById("arrow").checked = settings.arrow !== false;
+    document.getElementById("depth").value = String(settings.depth || 12);
+  }
+);
+
+document.getElementById("apply").addEventListener("click", async () => {
+  const settings = {
+    engine: document.getElementById("engine").value,
+    bar: document.getElementById("bar").checked,
+    arrow: document.getElementById("arrow").checked,
+    depth: Number(document.getElementById("depth").value)
+  };
+
+  try {
+    await chrome.storage.local.set(settings);
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!tab?.id) {
+      setStatus("Could not find the active tab.");
+      return;
+    }
+    await chrome.tabs.sendMessage(tab.id, {
+      type: "CHESS_TOPPER_SETTINGS",
+      settings
+    });
+    setStatus("Settings saved and sent to this tab.");
+  } catch (error) {
+    setStatus("Saved. Open a supported chess analysis page, then reload it.");
+  }
+});
