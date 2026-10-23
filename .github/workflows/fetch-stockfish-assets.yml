@@ -1,4 +1,4 @@
-name: Install and verify local Stockfish WASM
+name: Install and verify full Stockfish 19 WASM
 on:
   push:
     branches: [main]
@@ -34,21 +34,23 @@ jobs:
           done
           node -e "JSON.parse(require('fs').readFileSync('manifest.json', 'utf8'))"
           echo "JavaScript syntax and manifest JSON are valid."
-      - name: Download official Stockfish.js 19 lite single-threaded release
+      - name: Download official Stockfish.js 19.0.1 full single-threaded release
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p engine
           base="https://github.com/nmrugg/stockfish.js/releases/download/v19.0.1"
-          curl --fail --location --retry 3 --retry-delay 2 "$base/stockfish-19-lite-single.js" --output engine/stockfish-19-lite-single.js
-          curl --fail --location --retry 3 --retry-delay 2 "$base/stockfish-19-lite-single.wasm" --output engine/stockfish-19-lite-single.wasm
-          echo "ccb130d7ff29408531c47d859a49f91d59d4f482d05a53eb1a3231a4f624c91a  engine/stockfish-19-lite-single.js" | sha256sum --check
-          echo "ee4f115bdb2d32cadf96cada104a05b5ec257d7ad6f57582190b49bc71f096de  engine/stockfish-19-lite-single.wasm" | sha256sum --check
-          magic="$(head -c 4 engine/stockfish-19-lite-single.wasm | od -An -tx1 | tr -d ' \n')"
+          curl --fail --location --retry 3 --retry-delay 2 "$base/stockfish-19-single.js" --output engine/stockfish-19-single.js
+          curl --fail --location --retry 3 --retry-delay 2 "$base/stockfish-19-single.wasm" --output engine/stockfish-19-single.wasm
+          magic="$(head -c 4 engine/stockfish-19-single.wasm | od -An -tx1 | tr -d ' \\n')"
           test "$magic" = "0061736d" || { echo "Invalid WASM magic bytes"; exit 1; }
-          test "$(wc -c < engine/stockfish-19-lite-single.wasm)" -gt 1000000
-          grep -q "Stockfish" engine/stockfish-19-lite-single.js
-          echo "Validated official Stockfish.js 19 lite single-threaded assets."
+          js_size="$(wc -c < engine/stockfish-19-single.js)"
+          wasm_size="$(wc -c < engine/stockfish-19-single.wasm)"
+          test "$js_size" -gt 10000000 || { echo "Full engine JS is unexpectedly small"; exit 1; }
+          test "$wasm_size" -gt 10000000 || { echo "Full engine WASM is unexpectedly small"; exit 1; }
+          test "$js_size" -lt 100000000 || { echo "Full engine JS exceeds GitHub's normal file-size limit"; exit 1; }
+          grep -q "Stockfish" engine/stockfish-19-single.js
+          echo "Validated official full Stockfish 19 assets (JS: $js_size bytes; WASM: $wasm_size bytes)."
           node scripts/smoke-stockfish.mjs
       - name: Commit engine assets
         shell: bash
@@ -56,10 +58,10 @@ jobs:
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add engine/stockfish-19-lite-single.js engine/stockfish-19-lite-single.wasm
+          git add engine/stockfish-19-single.js engine/stockfish-19-single.wasm
           if git diff --cached --quiet; then
-            echo "Verified Stockfish assets are already current."
+            echo "Verified full Stockfish assets are already current."
             exit 0
           fi
-          git commit -m "Add verified Stockfish 19 lite single-threaded WASM"
+          git commit -m "Add full Stockfish 19 single-threaded WASM"
           git push
