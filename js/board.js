@@ -122,19 +122,21 @@
   }
   function analyse(fen){if(!state.engine||!fen)return;state.localSearchFen=fen;state.engine.postMessage('stop');state.engine.postMessage('position fen '+fen);state.engine.postMessage('go depth '+state.depth)}
     function readRemoteScore(data){
-    let value = data?.eval ?? data?.evaluation ?? data?.score;
-    if(value && typeof value==='object'){
-      if(Number.isFinite(value.cp)) return {cp:value.cp, mate:null};
-      if(Number.isFinite(value.mate)) return {cp:null, mate:value.mate};
-      if(Number.isFinite(value.value)) value=value.value;
+    const value=data?.eval??data?.evaluation??data?.score??data?.pvs?.[0]?.eval;
+    if(value&&typeof value==='object'){
+      if(value.type==='mate'&&Number.isFinite(value.value))return {cp:null,mate:value.value};
+      if(value.type==='cp'&&Number.isFinite(value.value))return {cp:value.value,mate:null};
+      if(Number.isFinite(value.cp))return {cp:value.cp,mate:null};
+      if(Number.isFinite(value.mate))return {cp:null,mate:value.mate};
+      if(Number.isFinite(value.value))return {cp:value.value,mate:null};
     }
-    if(typeof value==='number' && Number.isFinite(value)) return {cp:Math.abs(value)>100 ? value : value*100, mate:null};
-    if(Number.isFinite(data?.cp)) return {cp:data.cp, mate:null};
-    if(Number.isFinite(data?.mate)) return {cp:null, mate:data.mate};
+    if(typeof value==='number'&&Number.isFinite(value))return {cp:Math.abs(value)>100?value:value*100,mate:null};
+    if(Number.isFinite(data?.cp))return {cp:data.cp,mate:null};
+    if(Number.isFinite(data?.mate))return {cp:null,mate:data.mate};
     return null;
   }
   function remotePv(data){
-    const candidate=data?.pv ?? data?.bestline ?? data?.line ?? data?.principal_variation ?? data?.pvs?.[0]?.pv ?? data?.lines?.[0]?.pv;
+    const candidate=data?.pv ?? data?.bestline ?? data?.line ?? data?.continuation ?? data?.principal_variation ?? data?.pvs?.[0]?.moves ?? data?.pvs?.[0]?.pv ?? data?.lines?.[0]?.pv;
     if(Array.isArray(candidate)) return candidate.join(' ');
     if(typeof candidate==='string') return candidate;
     if(Array.isArray(data?.pvs) && typeof data.pvs[0]==='string') return data.pvs[0];
@@ -153,7 +155,8 @@
       if(seq!==state.remoteSeq || fen!==state.lastFen)return;
       if(!result?.ok) throw new Error(result?.error||'Server analysis failed');
       const data=result.data||{};
-      const best=String(data.bestmove||data.best_move||data.move||'').trim().split(/\s+/)[0];
+      const bestRaw=String(data.bestmove||data.best_move||data.move||'').trim().replace(/^bestmove\s+/i,'');
+      const best=bestRaw.match(/^[a-h][1-8][a-h][1-8][qrbn]?/i)?.[0]||'';
       if(!/^[a-h][1-8][a-h][1-8][qrbn]?$/i.test(best)) throw new Error('API response did not include a valid best move');
       const score=readRemoteScore(data);
       if(score?.cp!==null && score?.cp!==undefined) updateScore(score.cp);
