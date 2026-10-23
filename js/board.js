@@ -1,16 +1,16 @@
 (() => {
   if (window.__chessTopperLoaded) return; window.__chessTopperLoaded = true;
   const supportedAnalysisPath = () => /\/(analysis|study|review|game-review|puzzle)(\/|$)/i.test(location.pathname) || /analysis|study|review/i.test(location.search);
-  const state = {bar:true, arrow:true, depth:12, engineName:'stockfish', score:0, bestmove:null, engine:null, ready:false, lastFen:'', board:null, pv:'', uciReady:false, remoteSeq:0, remoteBusy:false, remoteLastFen:'', remoteFailed:false};
+  const state = {bar:true, arrow:true, depth:12, analysisMode:'auto', score:0, bestmove:null, engine:null, ready:false, lastFen:'', board:null, pv:'', uciReady:false, remoteSeq:0, remoteBusy:false, remoteLastFen:'', remoteFailed:false};
   const files='abcdefgh';
-  const panel=document.createElement('div'); panel.id='chess-topper-panel'; panel.innerHTML='<div class="ct-bar"><div class="ct-white"></div><div class="ct-score">0.0</div></div><div class="ct-card"><div class="ct-title">♞ Chess Topper</div><div class="ct-line ct-engine">Engine: Stockfish 19 Lite</div><div class="ct-line ct-move">Best move: —</div><div class="ct-line ct-eval">Evaluation: —</div><div class="ct-line ct-pv">Line: —</div><div class="ct-status">Looking for an analysis board…</div><button class="ct-toggle">Hide</button></div>';
+  const panel=document.createElement('div'); panel.id='chess-topper-panel'; panel.innerHTML='<div class="ct-bar"><div class="ct-white"></div><div class="ct-score">0.0</div></div><div class="ct-card"><div class="ct-title">♞ Chess Topper</div><div class="ct-line ct-engine">Mode: Auto (server → WASM)</div><div class="ct-line ct-move">Best move: —</div><div class="ct-line ct-eval">Evaluation: —</div><div class="ct-line ct-pv">Line: —</div><div class="ct-status">Looking for an analysis board…</div><button class="ct-toggle">Hide</button></div>';
   const arrowSvg=document.createElementNS('http://www.w3.org/2000/svg','svg'); arrowSvg.id='chess-topper-arrow'; arrowSvg.setAttribute('viewBox',`0 0 ${innerWidth} ${innerHeight}`); arrowSvg.setAttribute('preserveAspectRatio','none'); arrowSvg.innerHTML='<defs><marker id="ct-head" markerWidth="7" markerHeight="7" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 z" fill="#12a66a"/></marker></defs><line id="ct-line" x1="0" y1="0" x2="0" y2="0" stroke="#12a66a" stroke-width="9" stroke-linecap="round" marker-end="url(#ct-head)" opacity=".88"/>';
   document.documentElement.append(panel,arrowSvg);
   const $=s=>panel.querySelector(s);
   $('.ct-toggle').onclick=()=>{const card=$('.ct-card');const hidden=card.style.display==='none';card.style.display=hidden?'':'none';$('.ct-toggle').textContent=hidden?'Hide':'Show';};
-  chrome.storage?.local?.get({engine:'stockfish',bar:true,arrow:true,depth:12},v=>applySettings(v));
+  chrome.storage?.local?.get({analysisMode:'auto',bar:true,arrow:true,depth:12},v=>applySettings(v));
   chrome.runtime?.onMessage?.addListener(msg=>{if(msg.type==='CHESS_TOPPER_SETTINGS')applySettings(msg.settings)});
-  function applySettings(v){const next=Object.assign({},state,v||{});const engineChanged=(next.engine||'stockfish')!==state.engineName;state.bar=next.bar!==false;state.arrow=next.arrow!==false;state.depth=Number(next.depth)||12;state.engineName=next.engine||'stockfish';$('.ct-bar').style.display=state.bar?'':'none';arrowSvg.style.display=state.arrow?'':'none';$('.ct-engine').textContent='Engine: '+(state.engineName==='andromeda'?'Andromeda':'Stockfish 19 Lite');if(engineChanged){if(state.engine){state.engine.terminate();state.engine=null;}state.ready=false;state.uciReady=false;state.bestmove=null;$('.ct-move').textContent='Best move: —';$('.ct-pv').textContent='Line: —';}if(state.lastFen){if(state.engineName==='stockfish'){remoteAnalyse(state.lastFen)}else{if(!state.engine)bootEngine();else analyse(state.lastFen)}}}
+  function applySettings(v){const next=Object.assign({},state,v||{});const mode=['auto','wasm','server'].includes(next.analysisMode)?next.analysisMode:'auto';const modeChanged=mode!==state.analysisMode;state.bar=next.bar!==false;state.arrow=next.arrow!==false;state.depth=Math.min(20,Math.max(1,Number(next.depth)||12));state.analysisMode=mode;$('.ct-bar').style.display=state.bar?'':'none';arrowSvg.style.display=state.arrow?'':'none';$('.ct-engine').textContent='Mode: '+({auto:'Auto (server → WASM)',wasm:'Local WASM',server:'Server only'}[mode]);if(modeChanged){state.remoteSeq++;state.remoteBusy=false;state.bestmove=null;state.remoteFailed=false;state.pendingFallbackFen='';}if(state.lastFen){if(mode==='wasm'){if(!state.engine)bootEngine();if(state.engine&&state.ready)analyse(state.lastFen);else state.pendingFallbackFen=state.lastFen;}else{remoteAnalyse(state.lastFen)}}}
   function status(t){$('.ct-status').textContent=t}
   function findBoard(){return document.querySelector('cg-board')?.closest('cg-container')||document.querySelector('cg-board')||document.querySelector('chess-board')||document.querySelector('[data-board]')||document.querySelector('.board');}
   function squareFromTransform(el, board, lichess){const r=board.getBoundingClientRect(),pr=el.getBoundingClientRect();if(lichess){const t=el.style.transform||getComputedStyle(el).transform;const m=t.match(/translate\(([-\d.]+)px,\s*([-\d.]+)px\)/);if(m){const sq=Math.min(r.width,r.height)/8;return [Math.round(parseFloat(m[1])/sq),Math.round(parseFloat(m[2])/sq)]}}return [Math.floor((pr.left-r.left+r.width/16)/(r.width/8)),Math.floor((pr.top-r.top+r.height/16)/(r.height/8))]}
@@ -29,9 +29,7 @@
   function updateScore(cp){state.score=cp;const pawns=cp/100,clamped=Math.max(-10,Math.min(10,pawns));$('.ct-white').style.height=(50+clamped*4.5)+'%';const txt=(pawns>0?'+':'')+pawns.toFixed(1);$('.ct-score').textContent=txt;$('.ct-eval').textContent='Evaluation: '+txt}
   function bootEngine(){
     if(state.engine||!supportedAnalysisPath())return;
-    const files=state.engineName==='andromeda'
-      ? {js:'engine/andromeda.js',label:'Andromeda'}
-      : {js:'engine/stockfish-19-lite.js',label:'Stockfish 19 Lite'};
+    const files={js:'engine/stockfish-19-lite.js',label:'Stockfish 19 Lite'};
     try {
       const worker=new Worker(chrome.runtime.getURL(files.js));
       state.engine=worker;
@@ -100,6 +98,7 @@
     } catch(error) {
       if(seq!==state.remoteSeq || fen!==state.lastFen)return;
       state.remoteFailed=true;
+      if(state.analysisMode==='server'){status('Server analysis failed: '+(error?.message||'request failed'));return;}
       status('Server slow/unavailable; switching to local WASM…');
       if(!state.engine)bootEngine();
       if(state.engine){if(state.ready)analyse(fen);else state.pendingFallbackFen=fen;}
@@ -107,6 +106,6 @@
       if(seq===state.remoteSeq)state.remoteBusy=false;
     }
   }
-function scan(){if(!supportedAnalysisPath()){status('Open analysis, study, or review mode to use Chess Topper.');return}const p=readPosition();if(!p){status('Waiting for a readable analysis board…');return}if(p.fen!==state.lastFen){state.lastFen=p.fen;state.bestmove=null;arrowSvg.querySelector('#ct-line').setAttribute('opacity','0');if(state.engineName==='stockfish'){remoteAnalyse(p.fen)}else{if(!state.engine)bootEngine();if(state.engine&&state.ready)analyse(p.fen)}}}
+function scan(){if(!supportedAnalysisPath()){status('Open analysis, study, or review mode to use Chess Topper.');return}const p=readPosition();if(!p){status('Waiting for a readable analysis board…');return}if(p.fen!==state.lastFen){state.lastFen=p.fen;state.bestmove=null;state.pv='';arrowSvg.querySelector('#ct-line').setAttribute('opacity','0');if(state.analysisMode==='wasm'){if(!state.engine)bootEngine();if(state.engine&&state.ready)analyse(p.fen);else state.pendingFallbackFen=p.fen;}else{remoteAnalyse(p.fen)}}}
   setInterval(scan,1400);window.addEventListener('resize',()=>state.bestmove&&drawArrow(state.bestmove));
 })();
