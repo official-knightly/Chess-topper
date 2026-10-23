@@ -1,1 +1,22 @@
-<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="../css/popup.css"><title>Chess Topper</title></head><body><main><div class="brand"><span class="knight">♞</span><div><b>Chess Topper</b><small>Local board analysis</small></div></div><div class="notice">Use in analysis, study, puzzles, or post-game review—not during live rated games.</div><label class="switchrow"><span>Show evaluation bar</span><input id="bar" type="checkbox" checked></label><label class="switchrow"><span>Show best-move arrow</span><input id="arrow" type="checkbox" checked></label><label class="row">Analysis depth<select id="depth"><option value="8">Quick · 8</option><option value="12" selected>Normal · 12</option><option value="16">Deep · 16</option></select></label><button id="apply">Apply to this tab</button><p id="status">Ready</p><script src="../js/popup.js"></script></main></body></html>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="../css/popup.css">
+  <title>Chess Topper</title>
+</head>
+<body>
+  <main>
+    <div class="brand"><span class="knight">♞</span><div><b>Chess Topper</b><small>Local chess analysis</small></div></div>
+    <div class="notice">Use for analysis, puzzles, and post-game review—not during live rated games.</div>
+    <label class="row"><span>Engine</span><select id="engine"><option value="stockfish">Stockfish 19 Lite</option><option value="andromeda">Andromeda</option></select></label>
+    <label class="switchrow"><span>Show evaluation bar</span><input id="bar" type="checkbox" checked></label>
+    <label class="switchrow"><span>Show best-move arrow</span><input id="arrow" type="checkbox" checked></label>
+    <label class="row"><span>Analysis depth</span><select id="depth"><option value="8">Quick · 8</option><option value="12" selected>Normal · 12</option><option value="16">Deep · 16</option></select></label>
+    <button id="apply">Apply to this tab</button>
+    <p id="status" role="status">Ready</p>
+    <script src="../js/popup.js"></script>
+  </main>
+</body>
+</html>
