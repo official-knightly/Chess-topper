@@ -6,6 +6,7 @@ on:
       - ".github/workflows/fetch-stockfish-assets.yml"
       - "js/board.js"
       - "manifest.json"
+      - "scripts/smoke-stockfish.mjs"
   workflow_dispatch:
 permissions:
   contents: write
@@ -36,6 +37,7 @@ jobs:
           test "$(wc -c < engine/stockfish-19-lite-single.wasm)" -gt 1000000
           grep -q "Stockfish" engine/stockfish-19-lite-single.js
           echo "Validated official Stockfish.js 19 lite single-threaded assets."
+          node scripts/smoke-stockfish.mjs
       - name: Commit engine assets
         shell: bash
         run: |
