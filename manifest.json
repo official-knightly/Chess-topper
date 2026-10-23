@@ -1,16 +1,56 @@
 {
   "manifest_version": 3,
   "name": "Chess Topper — Analysis Bar",
-  "version": "0.1.0",
-  "description": "Local engine analysis arrow and evaluation bar for analysis, study, and post-game review boards.",
-  "permissions": ["storage", "activeTab"],
-  "host_permissions": ["https://www.chess.com/*", "https://chess.com/*", "https://lichess.org/*", "https://worldchess.com/*", "https://*.worldchess.com/*"],
-  "action": {"default_title": "Chess Topper", "default_popup": "popup.html"},
-  "content_scripts": [{
-    "matches": ["https://www.chess.com/*", "https://chess.com/*", "https://lichess.org/*", "https://worldchess.com/*", "https://*.worldchess.com/*"],
-    "js": ["board.js"],
-    "css": ["style.css"],
-    "run_at": "document_idle"
-  }],
-  "web_accessible_resources": [{"resources": ["stockfish-19-lite.js", "stockfish-19-lite.wasm", "stockfish-19-lite.worker.js"], "matches": ["https://www.chess.com/*", "https://chess.com/*", "https://lichess.org/*", "https://worldchess.com/*", "https://*.worldchess.com/*"]}]
+  "version": "0.2.0",
+  "description": "Local engine analysis arrow and evaluation bar for analysis, study, puzzles, and post-game review.",
+  "permissions": [
+    "storage",
+    "activeTab",
+    "tabs"
+  ],
+  "host_permissions": [
+    "https://www.chess.com/*",
+    "https://chess.com/*",
+    "https://lichess.org/*",
+    "https://worldchess.com/*",
+    "https://*.worldchess.com/*"
+  ],
+  "action": {
+    "default_title": "Chess Topper",
+    "default_popup": "html/popup.html"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.chess.com/*",
+        "https://chess.com/*",
+        "https://lichess.org/*",
+        "https://worldchess.com/*",
+        "https://*.worldchess.com/*"
+      ],
+      "js": [
+        "js/board.js"
+      ],
+      "css": [
+        "css/style.css"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "engine/stockfish-19-lite.js",
+        "engine/stockfish-19-lite.wasm",
+        "engine/stockfish-19-lite.worker.js"
+      ],
+      "matches": [
+        "https://www.chess.com/*",
+        "https://chess.com/*",
+        "https://lichess.org/*",
+        "https://worldchess.com/*",
+        "https://*.worldchess.com/*"
+      ]
+    }
+  ]
 }
