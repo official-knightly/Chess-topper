@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const enginePath = path.join(root, "engine", "stockfish-19-lite-single.js");
+const enginePath = path.join(root, "engine", "stockfish-19-single.js");
 const child = spawn(process.execPath, [enginePath], {
   cwd: path.join(root, "engine"),
   stdio: ["pipe", "pipe", "pipe"]
