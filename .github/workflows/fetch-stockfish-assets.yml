@@ -18,19 +18,20 @@ jobs:
         with:
           ref: main
           persist-credentials: true
-      - name: Download matching Stockfish 19.0.0 npm distribution
+      - name: Download matching Stockfish 19.0.1 npm distribution
         shell: bash
         run: |
           set -euo pipefail
-          npm pack stockfish@19.0.0 --silent
-          mkdir -p /tmp/sf package-unpacked engine
-          tar -xzf stockfish-19.0.0.tgz -C /tmp/sf
-          find /tmp/sf/package -type f -name 'stockfish-19-lite.wasm' -print -quit | grep -q .
-          cp "$(find /tmp/sf/package -type f -name 'stockfish-19-lite.wasm' -print -quit)" engine/stockfish.wasm
-          worker="$(find /tmp/sf/package -type f -name 'stockfish.worker.js' -print -quit || true)"
-          if [ -n "$worker" ]; then cp "$worker" engine/stockfish.worker.js; fi
-          test -s engine/stockfish.wasm
-          file engine/stockfish.wasm
+          npm pack stockfish@19.0.1 --silent
+          mkdir -p /tmp/sf engine
+          tar -xzf stockfish-19.0.1.tgz -C /tmp/sf
+          wasm="$(find /tmp/sf/package -type f -name 'stockfish-19-lite.wasm' -print -quit)"
+          worker="$(find /tmp/sf/package -type f -name 'stockfish.worker.js' -print -quit)"
+          test -n "$wasm" && test -s "$wasm" || { echo "Matching Stockfish WASM was not found in the npm package."; exit 1; }
+          test -n "$worker" && test -s "$worker" || { echo "Stockfish pthread worker was not found; this wrapper needs it."; exit 1; }
+          cp "$wasm" engine/stockfish.wasm
+          cp "$worker" engine/stockfish.worker.js
+          test "$(head -c 4 engine/stockfish.wasm | od -An -tx1 | tr -d ' \n')" = "0061736d"
       - name: Commit engine assets
         shell: bash
         run: |
