@@ -41,8 +41,11 @@
     {
       "resources": [
         "engine/stockfish-19-lite.js",
-        "engine/stockfish-19-lite.wasm",
-        "engine/stockfish-19-lite.worker.js"
+        "engine/stockfish.wasm",
+        "engine/stockfish.worker.js",
+        "engine/andromeda.js",
+        "engine/andromeda.wasm",
+        "engine/andromeda.worker.js"
       ],
       "matches": [
         "https://www.chess.com/*",
@@ -52,5 +55,11 @@
         "https://*.worldchess.com/*"
       ]
     }
-  ]
+  ],
+  "cross_origin_embedder_policy": {
+    "value": "require-corp"
+  },
+  "cross_origin_opener_policy": {
+    "value": "same-origin"
+  }
 }
