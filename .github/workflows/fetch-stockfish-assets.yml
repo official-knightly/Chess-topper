@@ -1,9 +1,10 @@
-name: Fetch Stockfish WASM assets
+name: Install local Stockfish WASM assets
 on:
   push:
     branches: [main]
     paths:
       - ".github/workflows/fetch-stockfish-assets.yml"
+      - "assets/stockfish-wasm.zip"
   workflow_dispatch:
 permissions:
   contents: write
@@ -11,27 +12,48 @@ concurrency:
   group: stockfish-assets
   cancel-in-progress: false
 jobs:
-  fetch-engine:
+  install-engine-assets:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           ref: main
+          lfs: true
           persist-credentials: true
-      - name: Download matching Stockfish 19.0.1 npm distribution
+      - name: Extract matching local engine files
         shell: bash
         run: |
           set -euo pipefail
-          npm pack stockfish@19.0.1 --silent
-          mkdir -p /tmp/sf engine
-          tar -xzf stockfish-19.0.1.tgz -C /tmp/sf
-          wasm="$(find /tmp/sf/package -type f -name 'stockfish-19-lite.wasm' -print -quit)"
-          worker="$(find /tmp/sf/package -type f -name 'stockfish.worker.js' -print -quit)"
-          test -n "$wasm" && test -s "$wasm" || { echo "Matching Stockfish WASM was not found in the npm package."; exit 1; }
-          test -n "$worker" && test -s "$worker" || { echo "Stockfish pthread worker was not found; this wrapper needs it."; exit 1; }
+          git lfs install
+          test -s assets/stockfish-wasm.zip || {
+            echo "Missing assets/stockfish-wasm.zip. Add a ZIP containing the matching Stockfish WASM and worker assets, then rerun this workflow."
+            exit 1
+          }
+          rm -rf /tmp/stockfish-zip
+          mkdir -p /tmp/stockfish-zip engine
+          unzip -q assets/stockfish-wasm.zip -d /tmp/stockfish-zip
+          wasm=""
+          for name in stockfish-19-lite.wasm stockfish.wasm stockfish-19.wasm; do
+            wasm="$(find /tmp/stockfish-zip -type f -name "$name" -print -quit)"
+            if [ -n "$wasm" ]; then break; fi
+          done
+          test -n "$wasm" && test -s "$wasm" || {
+            echo "ZIP contains no recognized Stockfish WASM file."
+            exit 1
+          }
+          worker="$(find /tmp/stockfish-zip -type f \( -name 'stockfish.worker.js' -o -name 'stockfish-19-lite.worker.js' \) -print -quit)"
+          test -n "$worker" && test -s "$worker" || {
+            echo "ZIP is missing the matching stockfish.worker.js file. Include the worker from the same Stockfish.js build."
+            exit 1
+          }
           cp "$wasm" engine/stockfish.wasm
           cp "$worker" engine/stockfish.worker.js
-          test "$(head -c 4 engine/stockfish.wasm | od -An -tx1 | tr -d ' \n')" = "0061736d"
+          magic="$(head -c 4 engine/stockfish.wasm | od -An -tx1 | tr -d ' \n')"
+          test "$magic" = "0061736d" || {
+            echo "The extracted file is not a real WASM binary (it may be an LFS pointer)."
+            exit 1
+          }
+          echo "WASM bytes: $(wc -c < engine/stockfish.wasm)"
       - name: Commit engine assets
         shell: bash
         run: |
@@ -40,8 +62,8 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add engine/stockfish.wasm engine/stockfish.worker.js
           if git diff --cached --quiet; then
-            echo "No engine asset changes."
+            echo "Engine assets are already current."
             exit 0
           fi
-          git commit -m "Add Stockfish WASM engine assets"
+          git commit -m "Add local Stockfish WASM assets"
           git push
