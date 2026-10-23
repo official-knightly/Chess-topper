@@ -50,3 +50,10 @@ Stockfish is GPLv3. Preserve upstream license and copyright notices when redistr
 
 - [Stockfish API evaluation endpoint](https://stockfishapi.com/docs/api/evaluatePosition)
 - [Official Stockfish.js 19.0.1 release](https://github.com/nmrugg/stockfish.js/releases/tag/v19.0.1)
+
+
+## Engine and arrow behavior
+
+The local fallback uses the official **Stockfish.js 19 Lite single-threaded** JS/WASM pair. It is deliberately compact and does not require cross-origin isolation, but it is weaker than the full Stockfish 19 build. The full multi-threaded build can use multiple CPU threads but needs cross-origin isolation (`SharedArrayBuffer`); the full single-threaded build avoids that requirement at the cost of using one thread. A `.wasm` filename alone does not identify the strength—the matching JavaScript loader and WASM file must come from the same distribution variant.
+
+The best-move arrow accounts for black-side board orientation and the Chess.com `wc-chess-board` element, keeps its position current after scrolling/resizing, and offsets its arrowhead so it does not sit directly over the destination piece. Server requests have a longer timeout before Auto mode falls back to local WASM.
