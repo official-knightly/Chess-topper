@@ -48,7 +48,7 @@ child.stdout.on("data", chunk => {
     } else if (phase === "ready" && line.trim() === "readyok") {
       phase = "search";
       child.stdin.write("position startpos\ngo depth 3\n");
-    } else if (phase === "search" && /^bestmove\s+[a-h][1-8][a-h][1-8qrbn]?\b/.test(line.trim())) {
+    } else if (phase === "search" && /^bestmove\s+[a-h][1-8][a-h][1-8][qrbn]?\b/.test(line.trim())) {
       finish();
       break;
     }
