@@ -1,7 +1,7 @@
 (() => {
   if (window.__chessTopperLoaded) return; window.__chessTopperLoaded = true;
   const supportedAnalysisPath = () => /\/(analysis|study|review|game-review|puzzle)(\/|$)/i.test(location.pathname) || /analysis|study|review/i.test(location.search);
-  const state = {bar:true, arrow:true, depth:12, analysisMode:'auto', score:0, bestmove:null, engine:null, ready:false, lastFen:'', board:null, pv:'', uciReady:false, remoteSeq:0, remoteBusy:false, remoteLastFen:'', remoteFailed:false};
+  const state = {bar:true, arrow:true, depth:12, analysisMode:'auto', score:0, bestmove:null, engine:null, ready:false, lastFen:'', board:null, pv:'', uciReady:false, remoteSeq:0, remoteBusy:false, remoteLastFen:'', remoteFailed:false, localFallbackActive:false, localSearchFen:''};
   const files='abcdefgh';
   const panel=document.createElement('div'); panel.id='chess-topper-panel'; panel.innerHTML='<div class="ct-bar"><div class="ct-white"></div><div class="ct-score">0.0</div></div><div class="ct-card"><div class="ct-title">♞ Chess Topper</div><div class="ct-line ct-engine">Mode: Auto (server → WASM)</div><div class="ct-line ct-move">Best move: —</div><div class="ct-line ct-eval">Evaluation: —</div><div class="ct-line ct-pv">Line: —</div><div class="ct-status">Looking for an analysis board…</div><button class="ct-toggle">Hide</button></div>';
   const arrowSvg=document.createElementNS('http://www.w3.org/2000/svg','svg'); arrowSvg.id='chess-topper-arrow'; arrowSvg.setAttribute('viewBox',`0 0 ${innerWidth} ${innerHeight}`); arrowSvg.setAttribute('preserveAspectRatio','none'); arrowSvg.innerHTML='<defs><marker id="ct-head" markerWidth="7" markerHeight="7" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 z" fill="#12a66a"/></marker></defs><line id="ct-line" x1="0" y1="0" x2="0" y2="0" stroke="#12a66a" stroke-width="9" stroke-linecap="round" marker-end="url(#ct-head)" opacity=".88"/>';
@@ -12,7 +12,7 @@
   chrome.runtime?.onMessage?.addListener(msg=>{if(msg.type==='CHESS_TOPPER_SETTINGS')applySettings(msg.settings)});
   function applySettings(v){const next=Object.assign({},state,v||{});const mode=['auto','wasm','server'].includes(next.analysisMode)?next.analysisMode:'auto';const modeChanged=mode!==state.analysisMode;state.bar=next.bar!==false;state.arrow=next.arrow!==false;state.depth=Math.min(20,Math.max(1,Number(next.depth)||12));state.analysisMode=mode;$('.ct-bar').style.display=state.bar?'':'none';arrowSvg.style.display=state.arrow?'':'none';$('.ct-engine').textContent='Mode: '+({auto:'Auto (server → WASM)',wasm:'Local WASM',server:'Server only'}[mode]);if(modeChanged){state.remoteSeq++;state.remoteBusy=false;state.bestmove=null;state.remoteFailed=false;state.pendingFallbackFen='';}if(state.lastFen){if(mode==='wasm'){if(!state.engine)bootEngine();if(state.engine&&state.ready)analyse(state.lastFen);else state.pendingFallbackFen=state.lastFen;}else{remoteAnalyse(state.lastFen)}}}
   function status(t){$('.ct-status').textContent=t}
-  function findBoard(){return document.querySelector('cg-board')?.closest('cg-container')||document.querySelector('cg-board')||document.querySelector('chess-board')||document.querySelector('[data-board]')||document.querySelector('.board');}
+  function findBoard(){return document.querySelector('cg-board')||document.querySelector('chess-board')||document.querySelector('[data-board]')||document.querySelector('.board');}
   function squareFromTransform(el, board, lichess){const r=board.getBoundingClientRect(),pr=el.getBoundingClientRect();if(lichess){const t=el.style.transform||getComputedStyle(el).transform;const m=t.match(/translate\(([-\d.]+)px,\s*([-\d.]+)px\)/);if(m){const sq=Math.min(r.width,r.height)/8;return [Math.round(parseFloat(m[1])/sq),Math.round(parseFloat(m[2])/sq)]}}return [Math.floor((pr.left-r.left+r.width/16)/(r.width/8)),Math.floor((pr.top-r.top+r.height/16)/(r.height/8))]}
   function readPosition(){const b=findBoard();if(!b)return null;state.board=b;const r=b.getBoundingClientRect();if(r.width<100||r.height<100)return null;const grid=Array.from({length:8},()=>Array(8).fill(null));let pieces=Array.from(b.querySelectorAll('piece, .piece, [data-piece]'));const lichess=!!b.matches('cg-board')||!!b.querySelector('piece.white, piece.black');
     for(const p of pieces){let piece='',sqfile=-1,sqrank=-1;const cls=(p.className&&typeof p.className==='string'?p.className:'')+' '+(p.getAttribute('data-piece')||'');
@@ -37,6 +37,8 @@
         const line=typeof e.data==='string'?e.data:'';
         if(line==='uciok'){state.uciReady=true;worker.postMessage('setoption name Threads value 2');worker.postMessage('isready');return;}
         if(line==='readyok'){state.ready=true;status(files.label+' ready');if(state.pendingFallbackFen||state.lastFen){const fen=state.pendingFallbackFen||state.lastFen;state.pendingFallbackFen='';analyse(fen);}return;}
+        if(state.analysisMode!=='wasm'&&!state.localFallbackActive)return;
+        if(state.localSearchFen&&state.localSearchFen!==state.lastFen)return;
         const depth=line.match(/\bdepth (\\d+)/); if(depth)state.depthLive=Number(depth[1]);
         const cp=line.match(/\bscore cp (-?\\d+)/);
         const mate=line.match(/\bscore mate (-?\\d+)/);
@@ -52,7 +54,7 @@
       setTimeout(()=>{if(!state.ready)status('Loading '+files.label+'…');},800);
     } catch(err) {status('Could not start '+files.label+'.');}
   }
-  function analyse(fen){if(!state.engine||!fen)return;state.lastFen=fen;state.engine.postMessage('stop');state.engine.postMessage('position fen '+fen);state.engine.postMessage('go depth '+state.depth)}
+  function analyse(fen){if(!state.engine||!fen)return;state.localSearchFen=fen;state.engine.postMessage('stop');state.engine.postMessage('position fen '+fen);state.engine.postMessage('go depth '+state.depth)}
     function readRemoteScore(data){
     let value = data?.eval ?? data?.evaluation ?? data?.score;
     if(value && typeof value==='object'){
@@ -76,6 +78,9 @@
     const seq=++state.remoteSeq;
     state.remoteLastFen=fen;
     state.remoteBusy=true;
+    state.localFallbackActive=false;
+    state.localSearchFen='';
+    if(state.engine&&state.ready){try{state.engine.postMessage('stop')}catch(_){}}
     status('Requesting server Stockfish…');
     try {
       const result=await chrome.runtime.sendMessage({type:'CT_REMOTE_ANALYZE',fen,depth:Math.min(14,Math.max(1,state.depth)),multipv:2});
@@ -99,6 +104,7 @@
       if(seq!==state.remoteSeq || fen!==state.lastFen)return;
       state.remoteFailed=true;
       if(state.analysisMode==='server'){status('Server analysis failed: '+(error?.message||'request failed'));return;}
+      state.localFallbackActive=true;
       status('Server slow/unavailable; switching to local WASM…');
       if(!state.engine)bootEngine();
       if(state.engine){if(state.ready)analyse(fen);else state.pendingFallbackFen=fen;}
