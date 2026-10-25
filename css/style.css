@@ -21,7 +21,7 @@
   border:1px solid #d8dde3;border-radius:12px;padding:12px;
   box-shadow:0 4px 16px #00000012;max-height:calc(100vh - 120px);overflow:auto
 }
-#chess-topper-panel .ct-title{font-weight:800;font-size:15px;letter-spacing:-.2px;margin-bottom:8px;color:#15231b}
+#chess-topper-panel .ct-title{display:flex;align-items:center;gap:7px;font-weight:800;font-size:15px;letter-spacing:-.2px;margin-bottom:8px;color:#15231b}#chess-topper-panel .ct-knight-logo{width:25px;height:25px;flex:0 0 25px}
 #chess-topper-panel .ct-line{color:#3f4854;margin:7px 0;overflow-wrap:anywhere}
 #chess-topper-panel .ct-move{font-size:15px;font-weight:750;color:#176b45;background:#f1f8f3;border-radius:7px;padding:7px}
 #chess-topper-panel .ct-eval{font-weight:650}
