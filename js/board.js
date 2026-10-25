@@ -430,14 +430,22 @@ self.onmessage = function(e) {
   }
 
   // ─── Boot engine ──────────────────────────────────────────────────────────
+  function getExtensionUrl(path) {
+    const runtime = globalThis.chrome?.runtime || globalThis.browser?.runtime;
+    if (typeof runtime?.getURL !== 'function') {
+      throw new Error('Extension runtime API is unavailable in this context');
+    }
+    return runtime.getURL(path);
+  }
+
   function bootEngine() {
     if (state.engine) return;
 
     const def = ENGINES[state.engineIndex];
-    const url = chrome.runtime.getURL(def.js);
     status('Loading ' + def.label + '…');
 
     try {
+      const url = getExtensionUrl(def.js);
       let worker;
 
       if (def.id === 'rodent') {
