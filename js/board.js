@@ -431,7 +431,11 @@ self.onmessage = function(e) {
 
   // ─── Boot engine ──────────────────────────────────────────────────────────
   function getExtensionUrl(path) {
-    const runtime = globalThis.chrome?.runtime || globalThis.browser?.runtime;
+    // In an isolated content-script world Chrome can expose `chrome` as a
+    // binding without putting it on globalThis. Read both forms safely.
+    const chromeApi = typeof chrome !== 'undefined' ? chrome : null;
+    const browserApi = typeof browser !== 'undefined' ? browser : null;
+    const runtime = chromeApi?.runtime || browserApi?.runtime || chromeApi?.extension || browserApi?.extension;
     if (typeof runtime?.getURL !== 'function') {
       throw new Error('Extension runtime API is unavailable in this context');
     }
