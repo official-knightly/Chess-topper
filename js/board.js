@@ -176,7 +176,7 @@
     $('.ct-eng-name').textContent = ENGINES[state.engineIndex].label;
     status('Loading ' + ENGINES[state.engineIndex].label + '…');
     bootEngine();
-    void extension.storageSet({ engineIndex: state.engineIndex });
+    void extension.storageSet({ engineIndex: state.engineIndex }).catch(() => {});
   }
 
   $('.ct-eng-prev').onclick = () => switchEngine(-1);
@@ -478,9 +478,15 @@
   }
 
   // MV3 content scripts cannot reliably create a Worker directly from a
-  // chrome-extension:// URL. Fetch the web-accessible pair first, then put
-  // the engine JS inside a Blob Worker and provide the matching WASM bytes.
+  // chrome-extension:// URL. Stockfish uses the shared loader so its runtime
+  // check and WASM bootstrap are identical on every supported page.
   async function createEngineWorker(def) {
+    if (def.id === 'sf19' && typeof globalThis.__chessTopperStartStockfish === 'function') {
+      return globalThis.__chessTopperStartStockfish({
+        getURL: path => extension.getURL(path),
+      });
+    }
+
     const [jsUrl, wasmUrl] = await Promise.all([getExtensionUrl(def.js), getExtensionUrl(def.wasm)]);
 
     const [jsResponse, wasmResponse] = await Promise.all([fetch(jsUrl), fetch(wasmUrl)]);
@@ -540,7 +546,7 @@ self.addEventListener('message', __chessTopperInit);
     if (fallback >= 0) {
       state.engineIndex = fallback;
       $('.ct-eng-name').textContent = ENGINES[fallback].label;
-      void extension.storageSet({ engineIndex: fallback });
+      void extension.storageSet({ engineIndex: fallback }).catch(() => {});
       status(def.label + ' failed — trying ' + ENGINES[fallback].label + '…');
       setTimeout(bootEngine, 250);
     } else {

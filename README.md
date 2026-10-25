@@ -34,6 +34,7 @@ Stockfish is GPLv3. Preserve upstream license and copyright notices when redistr
 
 - `manifest.json` — extension manifest and engine resource permissions
 - `html/popup.html`, `js/popup.js`, `css/popup.css` — settings popup
+- `js/engine-loader.js` — safe Stockfish/WASM bootstrap in an extension worker
 - `js/board.js`, `css/style.css` — analysis overlay and board reader
 - `js/background.js` — server API requests and timeout
 - `engine/stockfish-19.js` + `.wasm` — full Stockfish 19 local engine
