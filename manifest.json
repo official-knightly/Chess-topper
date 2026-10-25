@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Chess Topper — Analysis Bar",
-  "version": "0.5.8",
-  "description": "v0.5.8 — Green knight branding, arrow refresh fixes, and update checks.",
+  "version": "0.5.9",
+  "description": "v0.5.9 — Git LFS engine loading fallback.",
   "permissions": ["storage", "activeTab", "tabs"],
   "host_permissions": [
     "https://www.chess.com/*", "https://chess.com/*", "https://*.chess.com/*",
