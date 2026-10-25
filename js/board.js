@@ -225,16 +225,28 @@
 
   // ─── Board detection (chess.com, lichess, worldchess) ───
   function findBoard() {
-    const selectors = 'cg-board, wc-chess-board, chess-board, .main-board .board, [data-board], .board';
-    const candidates = Array.from(document.querySelectorAll(selectors));
-    return candidates
-      .map(board => {
-        const rect = board.getBoundingClientRect();
-        const pieces = board.querySelectorAll('piece, .piece, [data-piece]').length;
-        return { board, rect, pieces, area: rect.width * rect.height };
-      })
-      .filter(item => item.rect.width >= 100 && item.rect.height >= 100 && item.pieces >= 2)
-      .sort((a, b) => b.area - a.area || b.pieces - a.pieces)[0]?.board || null;
+    // Prefer each site's real board element; generic .board matches wrappers and
+    // analysis thumbnails, so only use those as a guarded fallback.
+    const preferred = 'cg-board, wc-chess-board, chess-board, [data-board]';
+    const fallback = '.main-board .board, .board';
+    const rank = board => {
+      const rect = board.getBoundingClientRect();
+      const pieces = board.querySelectorAll('piece, .piece, [data-piece]').length;
+      const area = rect.width * rect.height;
+      const visible = rect.width >= 160 && rect.height >= 160 &&
+        rect.bottom > 0 && rect.right > 0 && rect.top < innerHeight && rect.left < innerWidth;
+      const squareLike = rect.width > 0 && rect.height > 0 &&
+        Math.abs(rect.width - rect.height) / Math.max(rect.width, rect.height) < 0.18;
+      const siteBoard = board.matches('cg-board, wc-chess-board, chess-board, [data-board]');
+      return { board, rect, pieces, area, visible, squareLike, siteBoard };
+    };
+    const all = [...document.querySelectorAll(preferred)].map(rank)
+      .filter(x => x.visible && x.squareLike && x.pieces >= 2)
+      .sort((a,b) => Number(b.siteBoard)-Number(a.siteBoard) || b.area-a.area || b.pieces-a.pieces);
+    if (all.length) return all[0].board;
+    return [...document.querySelectorAll(fallback)].map(rank)
+      .filter(x => x.visible && x.squareLike && x.pieces >= 2)
+      .sort((a,b) => b.area-a.area || b.pieces-a.pieces)[0]?.board || null;
   }
 
   function squareFromTransform(el, board, blackOri) {
@@ -336,10 +348,8 @@
       return (isBottom !== blackOri) ? 'w' : 'b';
     }
 
-    // Move-list fallback covers live boards whose clock classes are hidden or renamed.
-    const plies = Array.from(document.querySelectorAll('.move-node, .move, [data-ply], .ply, [data-move-number]'))
-      .filter(el => el.offsetParent !== null);
-    if (plies.length) return plies.length % 2 ? 'b' : 'w';
+    // Do not infer the side to move from move-list length: lists may include
+    // variations, hidden moves, or a different game. Unknown turn is unsafe.
     return null;
   }
 
@@ -473,13 +483,43 @@
     headEl.setAttribute('opacity', state.arrow ? '0.96' : '0');
   }
 
-  function updateScore(cp) {
-    state.score = cp;
-    const pawns = cp / 100, clamped = Math.max(-10, Math.min(10, pawns));
-    $('.ct-white').style.height = (50 + clamped * 4.5) + '%';
+  function updateScore(cp, perspective = 'white') {
+    if (!Number.isFinite(cp)) return;
+    // UCI score is from the side-to-move perspective. The bar is always
+    // White's winning chance, so normalize before rendering it.
+    const whiteCp = perspective === 'stm' && state.lastFen.split(/\\s+/)[1] === 'b' ? -cp : cp;
+    state.score = whiteCp;
+    const pawns = whiteCp / 100;
+    // Common chess-eval bar scaling: clamp extreme scores but retain useful
+    // visual separation around equal positions.
+    const bounded = Math.max(-12, Math.min(12, pawns));
+    const whitePercent = 100 / (1 + Math.exp(-0.75 * bounded));
+    $('.ct-white').style.height = whitePercent + '%';
     const txt = (pawns > 0 ? '+' : '') + pawns.toFixed(1);
     $('.ct-score').textContent = txt;
-    $('.ct-eval').textContent = 'Evaluation: ' + txt;
+    $('.ct-eval').textContent = 'Evaluation: ' + txt + ' (White)';
+  }
+
+  function clearAnalysis(message = 'Position changed — analysing…') {
+    state.bestmove = null;
+    state.pv = '';
+    state.score = 0;
+    state.depthLive = 0;
+    state.localSearchFen = '';
+    $('.ct-white').style.height = '50%';
+    $('.ct-score').textContent = '0.0';
+    $('.ct-move').textContent = 'Best move: —';
+    $('.ct-eval').textContent = 'Evaluation: —';
+    $('.ct-pv').textContent = 'Line: —';
+    arrowSvg.querySelector('#ct-line').setAttribute('opacity', '0');
+    arrowSvg.querySelector('#ct-head').setAttribute('opacity', '0');
+    status(message);
+  }
+
+  function showPositionError(message) {
+    clearAnalysis(message);
+    $('.ct-position').textContent = 'Position: unavailable';
+    state.lastFen = '';
   }
 
   // ─── Boot engine ──────────────────────────────────────────────────────────
@@ -629,7 +669,7 @@ self.addEventListener('message', __chessTopperInit);
         const mate = line.match(/\bscore mate (-?\d+)/);
         const pv   = line.match(/\bpv (.+)$/);
 
-        if (cp) updateScore(Number(cp[1]));
+        if (cp) updateScore(Number(cp[1]), 'stm');
         if (mate) {
           $('.ct-eval').textContent  = 'Evaluation: Mate in ' + mate[1];
           $('.ct-score').textContent = 'M' + mate[1];
@@ -719,7 +759,9 @@ self.addEventListener('message', __chessTopperInit);
       const best = bestRaw.match(/^[a-h][1-8][a-h][1-8][qrbn]?/i)?.[0] || '';
       if (!/^[a-h][1-8][a-h][1-8][qrbn]?$/i.test(best)) throw new Error('No valid best move in API response');
       const score = readRemoteScore(data);
-      if (score?.cp != null) updateScore(score.cp);
+      // The remote endpoint's score convention can vary; only treat explicit
+      // score objects as white-relative unless the API declares side-to-move.
+      if (score?.cp != null) updateScore(score.cp, data.score_perspective === 'side-to-move' ? 'stm' : 'white');
       else if (score?.mate != null) {
         $('.ct-eval').textContent  = 'Evaluation: Mate in ' + score.mate;
         $('.ct-score').textContent = 'M' + score.mate;
@@ -784,7 +826,11 @@ self.addEventListener('message', __chessTopperInit);
   function scan() {
     const p = readPosition();
     observeBoard(p?.board);
-    if (!p) { status('Waiting for a chess board…'); return; }
+    if (!p) {
+      if (state.lastFen) showPositionError('Board/position lost — analysis cleared');
+      else status('Looking for a supported chess board…');
+      return;
+    }
     if (isBoardAnimating(p.board)) {
       status('Waiting for the move to finish…');
       scheduleScan(220);
@@ -792,14 +838,21 @@ self.addEventListener('message', __chessTopperInit);
     }
 
     $('.ct-position').textContent = p.fenComplete
-      ? 'Position: site FEN'
-      : 'Position: estimated' + (p.turnKnown ? ' (no castling/ep)' : ' (no turn/castling/ep)');
+      ? 'Position: verified site FEN'
+      : 'Position: estimated (no castling/en-passant)';
+
+    if (!p.fenComplete && !p.turnKnown) {
+      if (state.lastFen !== p.fen || state.bestmove) showPositionError('Cannot verify whose turn it is — analysis paused');
+      else status('Position incomplete — waiting for reliable turn data');
+      return;
+    }
 
     if (p.fen !== state.lastFen) {
       state.lastFen = p.fen;
-      state.bestmove = null; state.pv = '';
-      arrowSvg.querySelector('#ct-line').setAttribute('opacity', '0');
-      arrowSvg.querySelector('#ct-head').setAttribute('opacity', '0');
+      clearAnalysis('Position changed — analysing…');
+      $('.ct-position').textContent = p.fenComplete
+        ? 'Position: verified site FEN'
+        : 'Position: estimated (no castling/en-passant)';
       $('.ct-move').textContent = 'Best move: analysing…';
       $('.ct-pv').textContent = 'Line: calculating…';
       if (state.analysisMode === 'wasm') {
