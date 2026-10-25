@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Chess Topper — Analysis Bar",
-  "version": "0.5.6",
-  "description": "v0.5.6 — Stockfish 19 and Dragon engine switcher with evaluation, best-move arrows, and update checks.",
+  "version": "0.5.7",
+  "description": "v0.5.7 — Update checker and improved engine diagnostics with evaluation, best-move arrows, and update checks.",
   "permissions": ["storage", "activeTab", "tabs"],
   "host_permissions": [
     "https://www.chess.com/*", "https://chess.com/*", "https://*.chess.com/*",
