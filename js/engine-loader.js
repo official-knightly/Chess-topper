@@ -24,32 +24,37 @@
     const jsUrl = await resolveURL('engine/stockfish-19.js');
     const wasmUrl = await resolveURL('engine/stockfish-19.wasm');
 
-    const [jsResponse, wasmResponse] = await Promise.all([
+    // A normal GitHub source ZIP may contain Git LFS pointer text instead
+    // of the large asset. If that happens, retrieve the exact same tracked
+    // object through GitHub's public media endpoint; no engine bytes are
+    // rewritten or substituted with a different build.
+    const [localJsResponse, localWasmResponse] = await Promise.all([
       fetch(jsUrl),
       fetch(wasmUrl),
     ]);
-    if (!jsResponse.ok) throw new Error(`Stockfish JavaScript HTTP ${jsResponse.status}`);
-    if (!wasmResponse.ok) throw new Error(`Stockfish WASM HTTP ${wasmResponse.status}`);
-
-    const [jsSource, wasmBuffer] = await Promise.all([
-      jsResponse.text(),
-      wasmResponse.arrayBuffer(),
-    ]);
-    // GitHub may serve a tiny Git LFS pointer as text if the large asset was
-    // not uploaded as a real binary. Detect that explicitly instead of letting
-    // Emscripten fail later with an opaque compile/instantiate error.
-    if (/^version https:\/\/git-lfs\.github\.com\/spec\/v1/m.test(jsSource)) {
-      throw new Error('Stockfish JavaScript is a Git LFS pointer, not the engine file. Restore the real engine asset without editing its contents.');
+    if (!localJsResponse.ok) throw new Error(`Stockfish JavaScript HTTP ${localJsResponse.status}`);
+    if (!localWasmResponse.ok) throw new Error(`Stockfish WASM HTTP ${localWasmResponse.status}`);
+    let jsSource = await localJsResponse.text();
+    let wasmBuffer = await localWasmResponse.arrayBuffer();
+    const isLfsPointerText = (value) =>
+      /^version https:\/\/git-lfs\.github\.com\/spec\/v1/m.test(value);
+    const wasmPrefix = () => new TextDecoder().decode(wasmBuffer.slice(0, 120));
+    const mediaBase = 'https://media.githubusercontent.com/media/official-knightly/Chess-topper/main/';
+    if (isLfsPointerText(jsSource)) {
+      const response = await fetch(mediaBase + 'engine/stockfish-19.js');
+      if (!response.ok) throw new Error(`Stockfish LFS JavaScript download failed (HTTP ${response.status})`);
+      jsSource = await response.text();
+    }
+    if (isLfsPointerText(wasmPrefix())) {
+      const response = await fetch(mediaBase + 'engine/stockfish-19.wasm');
+      if (!response.ok) throw new Error(`Stockfish LFS WASM download failed (HTTP ${response.status})`);
+      wasmBuffer = await response.arrayBuffer();
     }
     if (jsSource.length < 10000) {
-      throw new Error('Stockfish JavaScript is unexpectedly small; the engine asset may be incomplete.');
+      throw new Error('Stockfish JavaScript is incomplete. Re-download the extension or check GitHub LFS availability.');
     }
-    if (wasmBuffer.byteLength < 1024 * 1024) {
-      const prefix = new TextDecoder().decode(wasmBuffer.slice(0, 120));
-      if (prefix.startsWith('version https://git-lfs.github.com/spec/v1')) {
-        throw new Error('Stockfish WASM is a Git LFS pointer, not the binary. The original WASM file was not modified.');
-      }
-      throw new Error('Stockfish WASM is empty or incomplete.');
+    if (wasmBuffer.byteLength < 80 * 1024 * 1024) {
+      throw new Error('Stockfish WASM is incomplete or GitHub LFS did not return the full engine (expected the full ~94 MB file).');
     }
     const wasmMagic = new Uint8Array(wasmBuffer, 0, 4);
     if (wasmMagic[0] !== 0 || wasmMagic[1] !== 0x61 || wasmMagic[2] !== 0x73 || wasmMagic[3] !== 0x6d) {
