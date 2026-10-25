@@ -438,12 +438,22 @@
   function drawArrow(move) {
     const line = arrowSvg.querySelector('#ct-line');
     if (!move || !/^[a-h][1-8][a-h][1-8][qrbn]?$/i.test(move) || !state.board) {
-      line.setAttribute('opacity', '0'); return;
+      line.setAttribute('opacity', '0');
+      arrowSvg.querySelector('#ct-head').setAttribute('opacity', '0');
+      return;
     }
     const a = squareCenter(move.slice(0, 2)), b = squareCenter(move.slice(2, 4));
-    if (!a || !b) { line.setAttribute('opacity', '0'); return; }
+    if (!a || !b) {
+      line.setAttribute('opacity', '0');
+      arrowSvg.querySelector('#ct-head').setAttribute('opacity', '0');
+      return;
+    }
     const dx = b.x - a.x, dy = b.y - a.y, len = Math.hypot(dx, dy);
-    if (!len) { line.setAttribute('opacity', '0'); return; }
+    if (!len) {
+      line.setAttribute('opacity', '0');
+      arrowSvg.querySelector('#ct-head').setAttribute('opacity', '0');
+      return;
+    }
     const rect = state.board.getBoundingClientRect(), sq = Math.min(rect.width, rect.height) / 8;
     const s0 = Math.min(sq * .18, len * .16), s1 = Math.min(sq * .28, len * .24);
     const head = Math.min(sq * .28, len * .24);
@@ -789,6 +799,9 @@ self.addEventListener('message', __chessTopperInit);
       state.lastFen = p.fen;
       state.bestmove = null; state.pv = '';
       arrowSvg.querySelector('#ct-line').setAttribute('opacity', '0');
+      arrowSvg.querySelector('#ct-head').setAttribute('opacity', '0');
+      $('.ct-move').textContent = 'Best move: analysing…';
+      $('.ct-pv').textContent = 'Line: calculating…';
       if (state.analysisMode === 'wasm') {
         if (!state.engine) bootEngine();
         if (state.engine && state.ready) analyse(p.fen);
