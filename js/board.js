@@ -2,6 +2,98 @@
   if (window.__chessTopperLoaded) return;
   window.__chessTopperLoaded = true;
 
+  const chromeApi = typeof chrome !== 'undefined' ? chrome : null;
+  const browserApi = typeof browser !== 'undefined' ? browser : null;
+  const runtimeApi = chromeApi?.runtime || browserApi?.runtime || null;
+  const storageApi = chromeApi?.storage?.local || browserApi?.storage?.local || null;
+  const BRIDGE_SOURCE = 'ChessTopperRuntimeBridge';
+  const bridgePending = new Map();
+  const settingsListeners = new Set();
+  let bridgeRequestId = 0;
+
+  window.addEventListener('message', event => {
+    if (event.source !== window || event.data?.source !== BRIDGE_SOURCE || event.data.direction !== 'to-page') return;
+    const data = event.data;
+    if (data.type === 'settings') {
+      settingsListeners.forEach(listener => listener(data.message));
+      return;
+    }
+    const pending = bridgePending.get(data.requestId);
+    if (!pending) return;
+    bridgePending.delete(data.requestId);
+    clearTimeout(pending.timer);
+    if (data.ok) pending.resolve(data.result);
+    else pending.reject(new Error(data.error || 'Extension runtime bridge failed'));
+  });
+
+  function callExtensionApi(start) {
+    return new Promise((resolve, reject) => {
+      let settled = false;
+      const finish = (fn, value) => {
+        if (settled) return;
+        settled = true;
+        fn(value);
+      };
+      try {
+        const result = start(value => {
+          const lastError = runtimeApi?.lastError;
+          if (lastError) finish(reject, new Error(lastError.message));
+          else finish(resolve, value);
+        });
+        if (result && typeof result.then === 'function') result.then(
+          value => finish(resolve, value),
+          error => finish(reject, error),
+        );
+      } catch (error) {
+        finish(reject, error);
+      }
+    });
+  }
+
+  function callRuntimeBridge(action, payload = {}) {
+    return new Promise((resolve, reject) => {
+      const requestId = 'ct-' + (++bridgeRequestId) + '-' + Date.now();
+      const timer = setTimeout(() => {
+        bridgePending.delete(requestId);
+        reject(new Error('Extension runtime bridge timed out'));
+      }, 5000);
+      bridgePending.set(requestId, { resolve, reject, timer });
+      window.postMessage({
+        source: BRIDGE_SOURCE,
+        direction: 'to-extension',
+        requestId,
+        action,
+        payload,
+      }, '*');
+    });
+  }
+
+  const extension = {
+    hasRuntime: typeof runtimeApi?.getURL === 'function',
+    getURL(path) {
+      return this.hasRuntime ? runtimeApi.getURL(path) : callRuntimeBridge('getURL', { path });
+    },
+    storageGet(defaults) {
+      return this.hasRuntime && storageApi
+        ? callExtensionApi(done => storageApi.get(defaults, done))
+        : callRuntimeBridge('getStorage', { defaults });
+    },
+    storageSet(values) {
+      return this.hasRuntime && storageApi
+        ? callExtensionApi(done => storageApi.set(values, done))
+        : callRuntimeBridge('setStorage', { values });
+    },
+    sendMessage(message) {
+      return this.hasRuntime
+        ? callExtensionApi(done => runtimeApi.sendMessage(message, done))
+        : callRuntimeBridge('sendMessage', { message });
+    },
+    onSettings(listener) {
+      if (this.hasRuntime && runtimeApi.onMessage?.addListener) runtimeApi.onMessage.addListener(listener);
+      else settingsListeners.add(listener);
+    },
+  };
+
   // ─── Engine definitions (browser-safe UCI workers only) ───
   const ENGINES = [
     { id: 'sf19',   label: 'Stockfish 19', js: 'engine/stockfish-19.js', wasm: 'engine/stockfish-19.wasm' },
@@ -84,20 +176,22 @@
     $('.ct-eng-name').textContent = ENGINES[state.engineIndex].label;
     status('Loading ' + ENGINES[state.engineIndex].label + '…');
     bootEngine();
-    chrome.storage?.local?.set({ engineIndex: state.engineIndex });
+    void extension.storageSet({ engineIndex: state.engineIndex });
   }
 
   $('.ct-eng-prev').onclick = () => switchEngine(-1);
   $('.ct-eng-next').onclick = () => switchEngine(1);
 
   // ─── Settings ───
-  chrome.storage?.local?.get({ analysisMode: 'auto', bar: true, arrow: true, depth: 16, engineIndex: 0 }, v => {
+  extension.storageGet({ analysisMode: 'auto', bar: true, arrow: true, depth: 16, engineIndex: 0 }).then(v => {
     state.engineIndex = Math.min(ENGINES.length - 1, Math.max(0, Number(v.engineIndex) || 0));
     $('.ct-eng-name').textContent = ENGINES[state.engineIndex].label;
     applySettings(v);
+  }).catch(() => {
+    applySettings({ analysisMode: 'auto', bar: true, arrow: true, depth: 16, engineIndex: 0 });
   });
 
-  chrome.runtime?.onMessage?.addListener(msg => {
+  extension.onSettings(msg => {
     if (msg.type === 'CHESS_TOPPER_SETTINGS') applySettings(msg.settings);
   });
 
@@ -380,23 +474,14 @@
 
   // ─── Boot engine ──────────────────────────────────────────────────────────
   function getExtensionUrl(path) {
-    // In an isolated content-script world Chrome can expose `chrome` as a
-    // binding without putting it on globalThis. Read both forms safely.
-    const chromeApi = typeof chrome !== 'undefined' ? chrome : null;
-    const browserApi = typeof browser !== 'undefined' ? browser : null;
-    const runtime = chromeApi?.runtime || browserApi?.runtime || chromeApi?.extension || browserApi?.extension;
-    if (typeof runtime?.getURL !== 'function') {
-      throw new Error('Extension runtime API is unavailable in this context');
-    }
-    return runtime.getURL(path);
+    return extension.getURL(path);
   }
 
   // MV3 content scripts cannot reliably create a Worker directly from a
   // chrome-extension:// URL. Fetch the web-accessible pair first, then put
   // the engine JS inside a Blob Worker and provide the matching WASM bytes.
   async function createEngineWorker(def) {
-    const jsUrl = getExtensionUrl(def.js);
-    const wasmUrl = getExtensionUrl(def.wasm);
+    const [jsUrl, wasmUrl] = await Promise.all([getExtensionUrl(def.js), getExtensionUrl(def.wasm)]);
 
     const [jsResponse, wasmResponse] = await Promise.all([fetch(jsUrl), fetch(wasmUrl)]);
     if (!jsResponse.ok) throw new Error('Engine JavaScript HTTP ' + jsResponse.status);
@@ -455,7 +540,7 @@ self.addEventListener('message', __chessTopperInit);
     if (fallback >= 0) {
       state.engineIndex = fallback;
       $('.ct-eng-name').textContent = ENGINES[fallback].label;
-      chrome.storage?.local?.set({ engineIndex: fallback });
+      void extension.storageSet({ engineIndex: fallback });
       status(def.label + ' failed — trying ' + ENGINES[fallback].label + '…');
       setTimeout(bootEngine, 250);
     } else {
@@ -607,7 +692,7 @@ self.addEventListener('message', __chessTopperInit);
     if (state.engine && state.ready) try { state.engine.postMessage('stop'); } catch (_) {}
     status('Requesting server Stockfish…');
     try {
-      const result = await chrome.runtime.sendMessage({
+      const result = await extension.sendMessage({
         type: 'CT_REMOTE_ANALYZE', fen,
         depth: Math.min(14, Math.max(1, state.depth)), multipv: 2,
       });
