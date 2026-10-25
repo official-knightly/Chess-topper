@@ -6,6 +6,7 @@ on:
       - ".github/workflows/fetch-stockfish-assets.yml"
       - ".gitattributes"
       - "js/board.js"
+      - "js/engine-loader.js"
       - "js/background.js"
       - "js/popup.js"
       - "html/popup.html"
@@ -30,7 +31,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for file in js/board.js js/background.js js/popup.js scripts/smoke-stockfish.mjs; do
+          for file in js/board.js js/engine-loader.js js/background.js js/popup.js scripts/smoke-stockfish.mjs; do
             node --check "$file"
           done
           node -e "JSON.parse(require('fs').readFileSync('manifest.json', 'utf8'))"
