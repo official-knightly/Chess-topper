@@ -1,81 +1,41 @@
 {
   "manifest_version": 3,
   "name": "Chess Topper — Analysis Bar",
-  "version": "0.5.5",
-  "description": "v0.5.5 — Stockfish 19 and Dragon engine switcher with live-board and post-game analysis. Works on chess.com, lichess.org, and worldchess.com with local WASM fallback.",
-  "permissions": [
-    "storage",
-    "activeTab",
-    "tabs"
-  ],
+  "version": "0.5.6",
+  "description": "v0.5.6 — Stockfish 19 and Dragon engine switcher with evaluation, best-move arrows, and update checks.",
+  "permissions": ["storage", "activeTab", "tabs"],
   "host_permissions": [
-    "https://www.chess.com/*",
-    "https://chess.com/*",
-    "https://*.chess.com/*",
-    "https://lichess.org/*",
-    "https://*.lichess.org/*",
-    "https://worldchess.com/*",
-    "https://*.worldchess.com/*",
-    "https://stockfishapi.com/*",
-    "https://raw.githubusercontent.com/*"
+    "https://www.chess.com/*", "https://chess.com/*", "https://*.chess.com/*",
+    "https://lichess.org/*", "https://*.lichess.org/*",
+    "https://worldchess.com/*", "https://*.worldchess.com/*",
+    "https://stockfishapi.com/*", "https://raw.githubusercontent.com/*"
   ],
-  "background": {
-    "service_worker": "js/background.js"
-  },
-  "action": {
-    "default_title": "Chess Topper",
-    "default_popup": "html/popup.html"
-  },
-  "content_scripts": [
-    {
-      "matches": [
-        "https://www.chess.com/*",
-        "https://chess.com/*",
-        "https://*.chess.com/*",
-        "https://lichess.org/*",
-        "https://*.lichess.org/*",
-        "https://worldchess.com/*",
-        "https://*.worldchess.com/*"
-      ],
-      "js": [
-        "js/runtime-bridge.js",
-        "js/engine-loader.js",
-        "js/board.js"
-      ],
-      "css": [
-        "css/style.css"
-      ],
-      "run_at": "document_idle",
-      "world": "ISOLATED"
-    }
-  ],
-  "web_accessible_resources": [
-    {
-      "resources": [
-        "engine/stockfish-19.js",
-        "engine/stockfish-19.wasm",
-        "engine/dragon.js",
-        "engine/dragon.wasm",
-        "engine/rodent/rodent.js",
-        "engine/rodent/rodent.wasm",
-        "engine/rodent/rodent.data",
-        "js/integrity.json"
-      ],
-      "matches": [
-        "https://www.chess.com/*",
-        "https://chess.com/*",
-        "https://*.chess.com/*",
-        "https://lichess.org/*",
-        "https://*.lichess.org/*",
-        "https://worldchess.com/*",
-        "https://*.worldchess.com/*"
-      ]
-    }
-  ],
-  "cross_origin_embedder_policy": {
-    "value": "require-corp"
-  },
-  "cross_origin_opener_policy": {
-    "value": "same-origin"
-  }
+  "background": {"service_worker": "js/background.js"},
+  "action": {"default_title": "Chess Topper", "default_popup": "html/popup.html"},
+  "content_scripts": [{
+    "matches": [
+      "https://www.chess.com/*", "https://chess.com/*", "https://*.chess.com/*",
+      "https://lichess.org/*", "https://*.lichess.org/*",
+      "https://worldchess.com/*", "https://*.worldchess.com/*"
+    ],
+    "js": ["js/runtime-bridge.js", "js/engine-loader.js", "js/board.js"],
+    "css": ["css/style.css"],
+    "run_at": "document_idle",
+    "world": "ISOLATED"
+  }],
+  "web_accessible_resources": [{
+    "resources": [
+      "engine/stockfish-19.js", "engine/stockfish-19.wasm",
+      "engine/dragon.js", "engine/dragon.wasm",
+      "engine/rodent/rodent.js", "engine/rodent/rodent.wasm",
+      "engine/rodent/rodent.data", "js/integrity.json"
+    ],
+    "matches": [
+      "https://www.chess.com/*", "https://chess.com/*", "https://*.chess.com/*",
+      "https://lichess.org/*", "https://*.lichess.org/*",
+      "https://worldchess.com/*", "https://*.worldchess.com/*"
+    ]
+  }],
+  "cross_origin_embedder_policy": {"value": "require-corp"},
+  "cross_origin_opener_policy": {"value": "same-origin"}
 }
