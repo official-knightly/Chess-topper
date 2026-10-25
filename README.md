@@ -1,6 +1,6 @@
 # Chess Topper — Analysis Bar (Manifest V3)
 
-Chess Topper provides an evaluation bar, best-move arrow, principal variation, and server/local analysis choices on supported chess analysis, study, puzzle, and review pages. It is intended for analysis and post-game review—not live rated games.
+Chess Topper provides an evaluation bar, best-move arrow, principal variation, and server/local analysis choices on supported live, analysis, study, puzzle, and review pages. Use engine assistance only where the chess site permits it.
 
 ## Install
 
@@ -42,7 +42,7 @@ Stockfish is GPLv3. Preserve upstream license and copyright notices when redistr
 ## Known limitations
 
 - The engine is checked with a UCI smoke test in GitHub Actions; browser-level testing on each chess site is still needed. The full engine is approximately 94 MB combined, so first load can be slow and uses substantial storage.
-- The extension only activates on analysis/study/review/puzzle-style URL paths; site URL patterns and board DOM may change.
+- The extension activates on supported chess domains and chooses the largest visible board, so it can follow live games as well as analysis/review boards. Site URL patterns and board DOM may change.
 - The reader prefers a site's native FEN when exposed. Otherwise it estimates FEN from piece DOM. That fallback cannot reliably recover castling rights or en-passant state and may not know whose turn it is; the panel labels those positions as estimated. Do not trust estimated-FEN results for exact game analysis.
 - Server requests time out after 1 second by design. Slow servers will cause local fallback even if they might eventually respond.
 

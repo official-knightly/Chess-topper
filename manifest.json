@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Chess Topper — Analysis Bar",
-  "version": "0.5.0",
-  "description": "v0.5.0 — engine switcher (Stockfish 19, Dragon, Rodent IV), post-game move analysis, auto-update notifications. Works on chess.com, lichess.org, and worldchess.com. Server-first with local WASM fallback.",
+  "version": "0.5.1",
+  "description": "v0.5.1 — engine switcher (Stockfish 19, Dragon, Rodent IV), live-board and post-game analysis, auto-update notifications. Works on chess.com, lichess.org, and worldchess.com. Server-first with local WASM fallback.",
   "permissions": [
     "storage",
     "activeTab",
@@ -11,7 +11,9 @@
   "host_permissions": [
     "https://www.chess.com/*",
     "https://chess.com/*",
+    "https://*.chess.com/*",
     "https://lichess.org/*",
+    "https://*.lichess.org/*",
     "https://worldchess.com/*",
     "https://*.worldchess.com/*",
     "https://stockfishapi.com/*",
@@ -29,7 +31,9 @@
       "matches": [
         "https://www.chess.com/*",
         "https://chess.com/*",
+        "https://*.chess.com/*",
         "https://lichess.org/*",
+        "https://*.lichess.org/*",
         "https://worldchess.com/*",
         "https://*.worldchess.com/*"
       ],
@@ -57,7 +61,9 @@
       "matches": [
         "https://www.chess.com/*",
         "https://chess.com/*",
+        "https://*.chess.com/*",
         "https://lichess.org/*",
+        "https://*.lichess.org/*",
         "https://worldchess.com/*",
         "https://*.worldchess.com/*"
       ]

@@ -49,13 +49,9 @@
   arrowSvg.setAttribute('viewBox', '0 0 1 1');
   arrowSvg.setAttribute('preserveAspectRatio', 'none');
   arrowSvg.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:2147483647;overflow:visible;';
-  arrowSvg.innerHTML = `<defs>
-    <marker id="ct-head" markerUnits="strokeWidth" markerWidth="4" markerHeight="4" refX="9" refY="5" orient="auto">
-      <path d="M0,0 L10,5 L0,10 z" fill="#12a66a"/>
-    </marker>
-  </defs>
-  <line id="ct-line" x1="0" y1="0" x2="0" y2="0" stroke="#12a66a" stroke-width="6"
-    stroke-linecap="round" marker-end="url(#ct-head)" opacity="0"/>`;
+  arrowSvg.innerHTML = `<line id="ct-line" x1="0" y1="0" x2="0" y2="0" stroke="#12a66a" stroke-width="6"
+    stroke-linecap="round" opacity="0"/>
+  <polygon id="ct-head" points="0,0 0,0 0,0" fill="#12a66a" opacity="0"/>`;
 
   document.documentElement.append(panel, arrowSvg);
 
@@ -128,28 +124,39 @@
 
   // ─── Board detection (chess.com, lichess, worldchess) ───
   function findBoard() {
-    return document.querySelector('cg-board')
-      || document.querySelector('wc-chess-board')
-      || document.querySelector('chess-board')
-      || document.querySelector('.main-board .board')
-      || document.querySelector('[data-board]')
-      || document.querySelector('.board');
+    const selectors = 'cg-board, wc-chess-board, chess-board, .main-board .board, [data-board], .board';
+    const candidates = Array.from(document.querySelectorAll(selectors));
+    return candidates
+      .map(board => {
+        const rect = board.getBoundingClientRect();
+        const pieces = board.querySelectorAll('piece, .piece, [data-piece]').length;
+        return { board, rect, pieces, area: rect.width * rect.height };
+      })
+      .filter(item => item.rect.width >= 100 && item.rect.height >= 100 && item.pieces >= 2)
+      .sort((a, b) => b.area - a.area || b.pieces - a.pieces)[0]?.board || null;
   }
 
-  function squareFromTransform(el, board, lichess) {
-    const r = board.getBoundingClientRect(), pr = el.getBoundingClientRect();
-    if (lichess) {
-      const t = el.style.transform || getComputedStyle(el).transform;
-      const m = t.match(/translate\(([-\d.]+)px,\s*([-\d.]+)px\)/);
-      if (m) {
-        const sq = Math.min(r.width, r.height) / 8;
-        return [Math.round(parseFloat(m[1]) / sq), Math.round(parseFloat(m[2]) / sq)];
-      }
+  function squareFromTransform(el, board, blackOri) {
+    const r = board.getBoundingClientRect();
+    const t = el.style.transform || getComputedStyle(el).transform || '';
+    const m = t.match(/translate\(\s*([-\d.]+)(?:px|%)?\s*,\s*([-\d.]+)(?:px|%)?\s*\)/i);
+    let x = NaN, y = NaN;
+    // A percentage translate is relative to the piece element, not the board;
+    // use its rendered rectangle in that case. Pixel transforms can be mapped
+    // directly when a site exposes them.
+    if (m && !/%/.test(m[0])) {
+      const sq = Math.min(r.width, r.height) / 8;
+      x = parseFloat(m[1]) / sq;
+      y = parseFloat(m[2]) / sq;
     }
-    return [
-      Math.floor((pr.left - r.left + r.width  / 16) / (r.width  / 8)),
-      Math.floor((pr.top  - r.top  + r.height / 16) / (r.height / 8)),
-    ];
+    if (!Number.isFinite(x) || !Number.isFinite(y)) {
+      const pr = el.getBoundingClientRect();
+      x = ((pr.left + pr.width / 2) - r.left) / (r.width / 8);
+      y = ((pr.top + pr.height / 2) - r.top) / (r.height / 8);
+    }
+    x = Math.max(0, Math.min(7, Math.round(x)));
+    y = Math.max(0, Math.min(7, Math.round(y)));
+    return [blackOri ? 7 - x : x, blackOri ? y : 7 - y];
   }
 
   function validFen(value) {
@@ -196,12 +203,42 @@
       if (/^b(lack)?$/i.test(v || '')) return 'b';
       if (/^w(hite)?$/i.test(v || '')) return 'w';
     }
-    const ctx = board.closest('.orientation-white,.orientation-black,.turn-white,.turn-black,[data-turn]') || board.parentElement;
-    const cls = (ctx?.className && typeof ctx.className === 'string' ? ctx.className : '').toLowerCase();
-    if (/turn-black|black-to-move|side-black/.test(cls)) return 'b';
-    if (/turn-white|white-to-move|side-white/.test(cls)) return 'w';
-    if (document.querySelector('.clock-black.running,.clock-black.active,[data-clock="black"].active')) return 'b';
-    if (document.querySelector('.clock-white.running,.clock-white.active,[data-clock="white"].active')) return 'w';
+    const contexts = [board, board.parentElement, board.closest('.game,.game-container,.board-layout')].filter(Boolean);
+    for (const ctx of contexts) {
+      const cls = (ctx.className && typeof ctx.className === 'string' ? ctx.className : '').toLowerCase();
+      if (/turn-black|black-to-move|side-black/.test(cls)) return 'b';
+      if (/turn-white|white-to-move|side-white/.test(cls)) return 'w';
+    }
+
+    const activeByColor = document.querySelector(
+      '.clock-black.running,.clock-black.active,[data-clock="black"].active,[data-color="black"].active,' +
+      '.clock-white.running,.clock-white.active,[data-clock="white"].active,[data-color="white"].active'
+    );
+    if (activeByColor) {
+      const cls = `${activeByColor.className || ''} ${activeByColor.parentElement?.className || ''}`.toLowerCase();
+      if (/black/.test(cls) || activeByColor.getAttribute('data-clock') === 'black' || activeByColor.getAttribute('data-color') === 'black') return 'b';
+      if (/white/.test(cls) || activeByColor.getAttribute('data-clock') === 'white' || activeByColor.getAttribute('data-color') === 'white') return 'w';
+    }
+
+    // Chess.com live clocks mark the active clock with player-turn/clock-player-turn.
+    // Their vertical order follows the board orientation, so map top/bottom to a side.
+    const clocks = Array.from(document.querySelectorAll(
+      '.clock-time-monospace, [role="timer"], .clock-component .clock-time, .rclock'
+    )).filter(el => el.offsetParent !== null);
+    const activeClock = clocks.find(el => /player-turn|clock-player-turn/.test(
+      `${el.className || ''} ${el.closest('.clock-component')?.className || ''}`.toLowerCase()
+    ));
+    if (activeClock && clocks.length >= 2) {
+      const ordered = clocks.slice().sort((a, b) => a.getBoundingClientRect().top - b.getBoundingClientRect().top);
+      const isBottom = activeClock === ordered[ordered.length - 1];
+      const blackOri = isBlackOrientation(board);
+      return (isBottom !== blackOri) ? 'w' : 'b';
+    }
+
+    // Move-list fallback covers live boards whose clock classes are hidden or renamed.
+    const plies = Array.from(document.querySelectorAll('.move-node, .move, [data-ply], .ply, [data-move-number]'))
+      .filter(el => el.offsetParent !== null);
+    if (plies.length) return plies.length % 2 ? 'b' : 'w';
     return null;
   }
 
@@ -210,10 +247,22 @@
     while (el && el.nodeType === 1) {
       const cls = typeof el.className === 'string' ? el.className : (el.className?.baseVal || '');
       const ori = el.getAttribute?.('data-orientation') || el.getAttribute?.('orientation') || '';
-      if (/\b(?:orientation-black|flipped|black-orientation)\b/i.test(cls) || /^black$/i.test(ori)) return true;
+      const flipped = el.getAttribute?.('data-flipped') || el.getAttribute?.('flipped') || '';
+      if (/\b(?:orientation-black|flipped|black-orientation)\b/i.test(cls) || /^black$/i.test(ori) || /^(?:true|1|black)$/i.test(flipped)) return true;
       el = el.parentElement;
     }
     return false;
+  }
+
+  function isBoardAnimating(board) {
+    if (!board) return false;
+    const cls = typeof board.className === 'string' ? board.className : (board.className?.baseVal || '');
+    if (/\b(?:animating|animation|transitioning|dragging|moving)\b/i.test(cls)) return true;
+    return Array.from(board.querySelectorAll('piece, .piece')).some(piece => {
+      const cls = typeof piece.className === 'string' ? piece.className : (piece.className?.baseVal || '');
+      return /\b(?:animating|animation|transitioning|dragging|moving)\b/i.test(cls)
+        || getComputedStyle(piece).animationName !== 'none';
+    });
   }
 
   function readPosition() {
@@ -231,28 +280,35 @@
     const blackOri = isBlackOrientation(b);
     for (const p of pieces) {
       let piece = '', sqfile = -1, sqrank = -1;
-      const cls = (p.className && typeof p.className === 'string' ? p.className : '') + ' ' + (p.getAttribute('data-piece') || '');
+      const cls = (p.className && typeof p.className === 'string' ? p.className : '') + ' ' +
+        (p.getAttribute('data-piece') || '') + ' ' + (p.getAttribute('data-piece-type') || '');
       if (lichess) {
         const c = cls.toLowerCase();
         const color = /\bwhite\b/.test(c) ? 'w' : /\bblack\b/.test(c) ? 'b' : '';
         const type = (c.match(/\b(king|queen|rook|bishop|knight|pawn)\b/i) || [])[1];
         if (color && type) {
           piece = color + ({ king: 'k', queen: 'q', rook: 'r', bishop: 'b', knight: 'n', pawn: 'p' }[type.toLowerCase()]);
-          const [x, y] = squareFromTransform(p, b, true);
-          sqfile = blackOri ? 7 - x : x;
-          sqrank = blackOri ? y : 7 - y;
+          [sqfile, sqrank] = squareFromTransform(p, b, blackOri);
         }
       } else {
         const pc = cls.match(/\b([wb])([KQRBNP])\b/i);
-        const coord = cls.match(/\bsquare-([1-8])([1-8])\b/);
+        const named = cls.match(/\b(white|black)\s*(king|queen|rook|bishop|knight|pawn)\b/i);
+        const coord = cls.match(/\bsquare-([1-8])([1-8])\b/) || p.getAttribute('data-square')?.match(/^([1-8])([1-8])$/);
         const numeric = cls.match(/\bsquare-(\d{1,2})\b/);
+        if (!pc && named) {
+          const color = named[1].toLowerCase() === 'white' ? 'w' : 'b';
+          const type = { king: 'k', queen: 'q', rook: 'r', bishop: 'b', knight: 'n', pawn: 'p' }[named[2].toLowerCase()];
+          piece = color + type;
+        }
         if (pc) {
           piece = pc[1].toLowerCase() + pc[2].toLowerCase();
-          if (coord) { sqfile = Number(coord[1]) - 1; sqrank = Number(coord[2]) - 1; }
-          else if (numeric && Number(numeric[1]) >= 1 && Number(numeric[1]) <= 64) {
-            const n = Number(numeric[1]) - 1;
-            sqfile = n % 8; sqrank = 7 - Math.floor(n / 8);
-          }
+        }
+        if (coord) { sqfile = Number(coord[1]) - 1; sqrank = Number(coord[2]) - 1; }
+        else if (numeric && Number(numeric[1]) >= 1 && Number(numeric[1]) <= 64) {
+          const n = Number(numeric[1]) - 1;
+          sqfile = n % 8; sqrank = 7 - Math.floor(n / 8);
+        } else if (piece) {
+          [sqfile, sqrank] = squareFromTransform(p, b, blackOri);
         }
       }
       if (piece && sqfile >= 0 && sqfile < 8 && sqrank >= 0 && sqrank < 8) grid[sqrank][sqfile] = piece;
@@ -289,13 +345,21 @@
     if (!len) { line.setAttribute('opacity', '0'); return; }
     const rect = state.board.getBoundingClientRect(), sq = Math.min(rect.width, rect.height) / 8;
     const s0 = Math.min(sq * .18, len * .16), s1 = Math.min(sq * .28, len * .24);
+    const head = Math.min(sq * .28, len * .24);
+    const ux = dx / len, uy = dy / len, px = -uy, py = ux;
+    const tipX = b.x - ux * s1, tipY = b.y - uy * s1;
+    const baseX = tipX - ux * head, baseY = tipY - uy * head;
+    const wing = head * .55;
     arrowSvg.setAttribute('viewBox', `0 0 ${window.innerWidth} ${window.innerHeight}`);
     line.setAttribute('x1', a.x + dx / len * s0);
     line.setAttribute('y1', a.y + dy / len * s0);
-    line.setAttribute('x2', b.x - dx / len * s1);
-    line.setAttribute('y2', b.y - dy / len * s1);
+    line.setAttribute('x2', baseX);
+    line.setAttribute('y2', baseY);
     line.setAttribute('stroke-width', Math.max(3, Math.min(7, sq * .075)));
     line.setAttribute('opacity', state.arrow ? '0.92' : '0');
+    const headEl = arrowSvg.querySelector('#ct-head');
+    headEl.setAttribute('points', `${tipX},${tipY} ${baseX + px * wing},${baseY + py * wing} ${baseX - px * wing},${baseY - py * wing}`);
+    headEl.setAttribute('opacity', state.arrow ? '0.96' : '0');
   }
 
   function updateScore(cp) {
@@ -548,16 +612,32 @@ self.onmessage = function(e) {
   }
 
   // ─── Board resize observer ────────────────────────────────────────────────
-  let observedBoard = null, boardResizeObs = null;
+  let observedBoard = null, boardResizeObs = null, boardMutationObs = null, scanTimer = null;
+
+  function scheduleScan(delay = 140) {
+    clearTimeout(scanTimer);
+    scanTimer = setTimeout(() => { scanTimer = null; scan(); }, delay);
+  }
+
   function observeBoard(board) {
     if (!board || board === observedBoard) return;
     observedBoard = board;
     if (boardResizeObs) boardResizeObs.disconnect();
+    if (boardMutationObs) boardMutationObs.disconnect();
     if (typeof ResizeObserver === 'function') {
       boardResizeObs = new ResizeObserver(() => {
         if (state.bestmove && state.board === observedBoard) drawArrow(state.bestmove);
       });
       boardResizeObs.observe(board);
+    }
+    if (typeof MutationObserver === 'function') {
+      boardMutationObs = new MutationObserver(() => scheduleScan());
+      boardMutationObs.observe(board, {
+        subtree: true,
+        childList: true,
+        attributes: true,
+        attributeFilter: ['class', 'style', 'data-fen', 'data-position', 'data-turn', 'data-side-to-move', 'data-flipped'],
+      });
     }
   }
 
@@ -566,6 +646,11 @@ self.onmessage = function(e) {
     const p = readPosition();
     observeBoard(p?.board);
     if (!p) { status('Waiting for a chess board…'); return; }
+    if (isBoardAnimating(p.board)) {
+      status('Waiting for the move to finish…');
+      scheduleScan(220);
+      return;
+    }
 
     $('.ct-position').textContent = p.fenComplete
       ? 'Position: site FEN'
@@ -587,7 +672,8 @@ self.onmessage = function(e) {
     }
   }
 
-  setInterval(scan, 1400);
+  setInterval(scan, 700);
+  scheduleScan(0);
   window.addEventListener('resize', () => state.bestmove && drawArrow(state.bestmove));
   window.addEventListener('scroll', () => state.bestmove && drawArrow(state.bestmove), true);
   window.visualViewport?.addEventListener('resize', () => state.bestmove && drawArrow(state.bestmove));
