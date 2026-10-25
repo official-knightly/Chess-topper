@@ -35,7 +35,26 @@
       jsResponse.text(),
       wasmResponse.arrayBuffer(),
     ]);
-    if (wasmBuffer.byteLength < 8) throw new Error('Stockfish WASM is empty or incomplete');
+    // GitHub may serve a tiny Git LFS pointer as text if the large asset was
+    // not uploaded as a real binary. Detect that explicitly instead of letting
+    // Emscripten fail later with an opaque compile/instantiate error.
+    if (/^version https:\/\/git-lfs\.github\.com\/spec\/v1/m.test(jsSource)) {
+      throw new Error('Stockfish JavaScript is a Git LFS pointer, not the engine file. Restore the real engine asset without editing its contents.');
+    }
+    if (jsSource.length < 10000) {
+      throw new Error('Stockfish JavaScript is unexpectedly small; the engine asset may be incomplete.');
+    }
+    if (wasmBuffer.byteLength < 1024 * 1024) {
+      const prefix = new TextDecoder().decode(wasmBuffer.slice(0, 120));
+      if (prefix.startsWith('version https://git-lfs.github.com/spec/v1')) {
+        throw new Error('Stockfish WASM is a Git LFS pointer, not the binary. The original WASM file was not modified.');
+      }
+      throw new Error('Stockfish WASM is empty or incomplete.');
+    }
+    const wasmMagic = new Uint8Array(wasmBuffer, 0, 4);
+    if (wasmMagic[0] !== 0 || wasmMagic[1] !== 0x61 || wasmMagic[2] !== 0x73 || wasmMagic[3] !== 0x6d) {
+      throw new Error('Stockfish WASM has an invalid header; expected the original WebAssembly binary.');
+    }
 
     // Stockfish.js calls WebAssembly.instantiateStreaming with its import
     // object.  Preserve those imports while supplying the already-fetched
