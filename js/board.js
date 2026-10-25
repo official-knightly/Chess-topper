@@ -4,9 +4,11 @@
 
   // ─── Engine definitions (browser-safe UCI workers only) ───
   const ENGINES = [
-    { id: 'sf19',   label: 'Stockfish 19', js: 'engine/stockfish-19.js'        },
-    { id: 'dragon', label: 'Dragon',       js: 'engine/dragon.js'              },
+    { id: 'sf19',   label: 'Stockfish 19', js: 'engine/stockfish-19.js', wasm: 'engine/stockfish-19.wasm' },
+    { id: 'dragon', label: 'Dragon',       js: 'engine/dragon.js',       wasm: 'engine/dragon.wasm'       },
   ];
+
+  const ENGINE_START_TIMEOUT_MS = 90000;
 
   const state = {
     bar: true, arrow: true, depth: 16, analysisMode: 'auto',
@@ -17,7 +19,7 @@
     remoteSeq: 0, remoteBusy: false, remoteLastFen: '',
     remoteFailed: false, localFallbackActive: false, localSearchFen: '',
     pendingFallbackFen: '', depthLive: 0,
-    failedEngines: {}, engineStartTimer: null,
+    failedEngines: {}, engineStartTimer: null, engineStarting: false, engineBootId: 0,
   };
 
   const FILES = 'abcdefgh';
@@ -67,6 +69,8 @@
 
   // ─── Engine switcher ───
   function switchEngine(delta) {
+    state.engineBootId++;
+    state.engineStarting = false;
     if (state.engine) {
       try { state.engine.terminate(); } catch (_) {}
       state.engine = null;
@@ -387,16 +391,93 @@
     return runtime.getURL(path);
   }
 
-  function bootEngine() {
-    if (state.engine) return;
+  // MV3 content scripts cannot reliably create a Worker directly from a
+  // chrome-extension:// URL. Fetch the web-accessible pair first, then put
+  // the engine JS inside a Blob Worker and provide the matching WASM bytes.
+  async function createEngineWorker(def) {
+    const jsUrl = getExtensionUrl(def.js);
+    const wasmUrl = getExtensionUrl(def.wasm);
+
+    const [jsResponse, wasmResponse] = await Promise.all([fetch(jsUrl), fetch(wasmUrl)]);
+    if (!jsResponse.ok) throw new Error('Engine JavaScript HTTP ' + jsResponse.status);
+    if (!wasmResponse.ok) throw new Error('Engine WASM HTTP ' + wasmResponse.status);
+    const [jsCode, wasmBuffer] = await Promise.all([jsResponse.text(), wasmResponse.arrayBuffer()]);
+    const executableCode = def.id === 'dragon'
+      ? jsCode.replace(/Module = \{\s*onRuntimeInitialized:/,
+          'Module = { wasmBinary: __chessTopperWasm, onRuntimeInitialized:')
+      : jsCode;
+
+    const source = `
+let __chessTopperWasm = null;
+const __chessTopperInit = event => {
+  if (!event.data || event.data.type !== 'CHESS_TOPPER_INIT_WASM') return;
+  self.removeEventListener('message', __chessTopperInit);
+  __chessTopperWasm = new Uint8Array(event.data.buffer);
+  const originalFetch = self.fetch.bind(self);
+  WebAssembly.instantiateStreaming = (response, imports) => WebAssembly.instantiate(__chessTopperWasm, imports);
+  self.fetch = (input, init) => {
+    const requestUrl = typeof input === 'string' ? input : input && input.url || '';
+    if (/\\.wasm(?:$|[?#])/i.test(requestUrl)) {
+      return Promise.resolve(new Response(__chessTopperWasm, {
+        status: 200,
+        headers: { 'Content-Type': 'application/wasm' }
+      }));
+    }
+    return originalFetch(input, init);
+  };
+  try {
+${executableCode}
+  } catch (error) {
+    postMessage('ChessTopper engine boot error: ' + (error && error.message || error));
+    throw error;
+  }
+};
+self.addEventListener('message', __chessTopperInit);
+`;
+    const blobUrl = URL.createObjectURL(new Blob([source], { type: 'application/javascript' }));
+    const workerUrl = blobUrl + '#' + encodeURIComponent(wasmUrl);
+    try {
+      const worker = new Worker(workerUrl, { type: 'classic', name: 'ChessTopper-' + def.id });
+      worker.postMessage({ type: 'CHESS_TOPPER_INIT_WASM', buffer: wasmBuffer }, [wasmBuffer]);
+      return worker;
+    } finally {
+      URL.revokeObjectURL(blobUrl);
+    }
+  }
+
+  function markEngineFailed(def, reason) {
+    state.engineStarting = false;
+    state.failedEngines[def.id] = true;
+    state.engine = null; state.ready = false; state.uciReady = false;
+    console.error('[ChessTopper] Engine failed:', def.label, reason || 'startup timeout');
+
+    const fallback = ENGINES.findIndex(engine => !state.failedEngines[engine.id]);
+    if (fallback >= 0) {
+      state.engineIndex = fallback;
+      $('.ct-eng-name').textContent = ENGINES[fallback].label;
+      chrome.storage?.local?.set({ engineIndex: fallback });
+      status(def.label + ' failed — trying ' + ENGINES[fallback].label + '…');
+      setTimeout(bootEngine, 250);
+    } else {
+      status('No local engine could start: ' + (reason || 'startup failed'));
+    }
+  }
+
+  async function bootEngine() {
+    if (state.engine || state.engineStarting) return;
 
     const def = ENGINES[state.engineIndex];
+    const bootId = ++state.engineBootId;
+    state.engineStarting = true;
     status('Loading ' + def.label + '…');
 
     try {
-      const url = getExtensionUrl(def.js);
-      // Both active engines are direct classic Worker UCI scripts.
-      const worker = new Worker(url);
+      const worker = await createEngineWorker(def);
+      if (bootId !== state.engineBootId) {
+        try { worker.terminate(); } catch (_) {}
+        return;
+      }
+      state.engineStarting = false;
 
       state.engine = worker;
 
@@ -404,27 +485,14 @@
         if (state.engine !== worker) return;
         clearTimeout(state.engineStartTimer);
         state.engineStartTimer = null;
-        state.failedEngines[def.id] = true;
-        state.engine = null; state.ready = false; state.uciReady = false;
         try { worker.terminate(); } catch (_) {}
-        console.error('[ChessTopper] Engine failed:', def.label, reason || 'startup timeout');
-
-        const fallback = ENGINES.findIndex(engine => !state.failedEngines[engine.id]);
-        if (fallback >= 0) {
-          state.engineIndex = fallback;
-          $('.ct-eng-name').textContent = ENGINES[fallback].label;
-          chrome.storage?.local?.set({ engineIndex: fallback });
-          status(def.label + ' failed — trying ' + ENGINES[fallback].label + '…');
-          setTimeout(bootEngine, 250);
-        } else {
-          status('No local engine could start. Reload the extension.');
-        }
+        markEngineFailed(def, reason);
       };
 
-      state.engineStartTimer = setTimeout(() => failEngine('startup timeout'), 15000);
+      state.engineStartTimer = setTimeout(() => failEngine('startup timeout'), ENGINE_START_TIMEOUT_MS);
 
       worker.onmessage = e => {
-        const line = typeof e.data === 'string' ? e.data : '';
+        const line = typeof e.data === 'string' ? e.data.trim() : '';
         if (!line) return;
 
         if (line === 'uciok') {
@@ -491,21 +559,9 @@
 
     } catch (err) {
       console.error('[ChessTopper] Could not start worker:', err?.message || err);
-      state.engine = null;
       clearTimeout(state.engineStartTimer);
       state.engineStartTimer = null;
-      state.failedEngines[def.id] = true;
-      state.ready = false; state.uciReady = false;
-      const fallback = ENGINES.findIndex(engine => !state.failedEngines[engine.id]);
-      if (fallback >= 0) {
-        state.engineIndex = fallback;
-        $('.ct-eng-name').textContent = ENGINES[fallback].label;
-        chrome.storage?.local?.set({ engineIndex: fallback });
-        status(def.label + ' unavailable — trying ' + ENGINES[fallback].label + '…');
-        setTimeout(bootEngine, 250);
-      } else {
-        status('No local engine could start. Reload the extension.');
-      }
+      if (bootId === state.engineBootId) markEngineFailed(def, err?.message || 'worker creation failed');
     }
   }
 
