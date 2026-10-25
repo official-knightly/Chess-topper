@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Chess Topper — Analysis Bar",
-  "version": "0.4.0",
-  "description": "Server-first analysis with a local full Stockfish 19 single-threaded WASM fallback for analysis, study, puzzles, and post-game review.",
+  "version": "0.5.0",
+  "description": "v0.5.0 — four-engine switcher (Stockfish 19, Dragon, Rodent IV, Explanation), post-game move analysis, auto-update notifications, and integrity lock. Works on chess.com, lichess.org, and worldchess.com. Server-first with local WASM fallback.",
   "permissions": [
     "storage",
     "activeTab",
@@ -14,7 +14,8 @@
     "https://lichess.org/*",
     "https://worldchess.com/*",
     "https://*.worldchess.com/*",
-    "https://stockfishapi.com/*"
+    "https://stockfishapi.com/*",
+    "https://raw.githubusercontent.com/*"
   ],
   "background": {
     "service_worker": "js/background.js"
@@ -45,7 +46,15 @@
     {
       "resources": [
         "engine/stockfish-19.js",
-        "engine/stockfish-19.wasm"
+        "engine/stockfish-19.wasm",
+        "engine/dragon.js",
+        "engine/dragon.wasm",
+        "engine/explanation-engine.js",
+        "engine/explanation-engine.wasm",
+        "engine/rodent/rodent.js",
+        "engine/rodent/rodent.wasm",
+        "engine/rodent/rodent.data",
+        "js/integrity.json"
       ],
       "matches": [
         "https://www.chess.com/*",
