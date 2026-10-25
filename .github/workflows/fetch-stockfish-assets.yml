@@ -1,0 +1,69 @@
+name: Install and verify full Stockfish 19 WASM
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/fetch-stockfish-assets.yml"
+      - ".gitattributes"
+      - "js/board.js"
+      - "js/background.js"
+      - "js/popup.js"
+      - "html/popup.html"
+      - "manifest.json"
+      - "scripts/smoke-stockfish.mjs"
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: stockfish-assets
+  cancel-in-progress: false
+jobs:
+  install-engine-assets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          lfs: true
+          persist-credentials: true
+      - name: Validate extension source files
+        shell: bash
+        run: |
+          set -euo pipefail
+          for file in js/board.js js/background.js js/popup.js scripts/smoke-stockfish.mjs; do
+            node --check "$file"
+          done
+          node -e "JSON.parse(require('fs').readFileSync('manifest.json', 'utf8'))"
+          echo "JavaScript syntax and manifest JSON are valid."
+      - name: Download official Stockfish.js 19.0.1 full single-threaded release
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p engine
+          base="https://github.com/nmrugg/stockfish.js/releases/download/v19.0.1"
+          curl --fail --location --retry 3 --retry-delay 2 "$base/stockfish-19.js" --output engine/stockfish-19.js
+          curl --fail --location --retry 3 --retry-delay 2 "$base/stockfish-19.wasm" --output engine/stockfish-19.wasm
+          magic="$(head -c 4 engine/stockfish-19.wasm | od -An -tx1 | tr -d '[:space:]')"
+          test "$magic" = "0061736d" || { echo "Invalid WASM magic bytes"; exit 1; }
+          js_size="$(wc -c < engine/stockfish-19.js)"
+          wasm_size="$(wc -c < engine/stockfish-19.wasm)"
+          test "$js_size" -gt 10000 || { echo "Full engine JS loader is unexpectedly small"; exit 1; }
+          test "$wasm_size" -gt 80000000 || { echo "Full engine WASM is unexpectedly small"; exit 1; }
+          total_size=$((js_size + wasm_size))
+          test "$total_size" -gt 80000000 || { echo "Full engine pair is unexpectedly small"; exit 1; }
+          grep -q "Stockfish" engine/stockfish-19.js
+          echo "Validated official full Stockfish 19 assets (JS: $js_size bytes; WASM: $wasm_size bytes)."
+          node scripts/smoke-stockfish.mjs
+      - name: Commit engine assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add engine/stockfish-19.js engine/stockfish-19.wasm
+          if git diff --cached --quiet; then
+            echo "Verified full Stockfish assets are already current."
+            exit 0
+          fi
+          git commit -m "Add full Stockfish 19 single-threaded WASM"
+          git push
