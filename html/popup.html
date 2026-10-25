@@ -8,8 +8,14 @@
 </head>
 <body>
   <main>
-    <div class="brand"><span class="knight">♞</span><div><b>Chess Topper</b><small>Local chess analysis</small></div></div>
-    <div class="notice">Works on live, analysis, puzzle, and review boards. Use only where the chess site permits engine assistance.</div>
+    <div class="brand"><span class="knight">♞</span><div><b>Chess Topper</b><small>Local chess analysis · v0.5.6</small></div></div>
+    <section id="updateNotice" class="update-notice" hidden aria-live="polite">
+      <strong>New update available</strong>
+      <p id="updateText">A newer version is available on GitHub.</p>
+      <button id="updateNow" type="button">Update now · Open GitHub</button>
+      <small>Chrome requires you to download and reload the extension manually.</small>
+    </section>
+    <div class="notice">Use engine assistance only on computer, analysis, study, puzzle, or review boards where the chess site permits it. Do not use it during rated human games.</div>
     <label class="row"><span>Analysis source</span><select id="analysisMode"><option value="auto">Auto: server → WASM</option><option value="wasm">Local WASM</option><option value="server">Server only</option></select></label>
     <label class="switchrow"><span>Show evaluation bar</span><input id="bar" type="checkbox" checked></label>
     <label class="switchrow"><span>Show best-move arrow</span><input id="arrow" type="checkbox" checked></label>
@@ -17,7 +23,7 @@
     <small class="keyhint">Key is optional; stored only in this browser profile.</small>
     <label class="row"><span>Analysis depth</span><select id="depth"><option value="8">Quick · 8</option><option value="12">Normal · 12</option><option value="16" selected>Deep · 16</option><option value="20">Maximum · 20</option></select></label>
     <button id="apply">Apply to this tab</button>
-    <p id="status" role="status">Ready</p>
+    <p id="status" role="status">Checking for updates…</p>
     <script src="../js/popup.js"></script>
   </main>
 </body>
