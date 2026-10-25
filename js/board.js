@@ -122,7 +122,7 @@
   panel.innerHTML = `
     <div class="ct-bar"><div class="ct-white"></div><div class="ct-score">0.0</div></div>
     <div class="ct-card">
-      <div class="ct-title">♞ Chess Topper</div>
+      <div class="ct-title"><svg class="ct-knight-logo" viewBox="0 0 64 64" aria-hidden="true"><path d="M13 55h40v-6H42l-2-8 9-9-3-10-8-5-1-9-10 2-5 8-7 6 4 9 9 2-3 9-7 5H13z" fill="#176b45"/><circle cx="37" cy="22" r="2.4" fill="#fff"/></svg><span>Chess Topper</span></div>
       <div class="ct-line ct-engine">Mode: Auto (server → WASM)</div>
       <div class="ct-line ct-eng-row">
         <button class="ct-eng-prev" title="Previous engine">◀</button>
