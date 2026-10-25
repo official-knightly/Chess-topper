@@ -1,8 +1,7 @@
 const statusEl = document.getElementById("status");
 const REPO_URL = "https://github.com/official-knightly/Chess-topper";
-const ZIP_URL = REPO_URL + "/archive/refs/heads/main.zip";
 const MANIFEST_URL = "https://raw.githubusercontent.com/official-knightly/Chess-topper/main/manifest.json";
-const CURRENT_VERSION = "0.5.6";
+const CURRENT_VERSION = "0.5.7";
 
 function setStatus(message) {
   statusEl.textContent = message;
@@ -12,7 +11,7 @@ async function checkForUpdates() {
   const notice = document.getElementById("updateNotice");
   const text = document.getElementById("updateText");
   document.getElementById("updateNow").addEventListener("click", () => {
-    chrome.tabs.create({ url: ZIP_URL });
+    chrome.tabs.create({ url: REPO_URL });
   });
   try {
     const controller = new AbortController();
@@ -41,8 +40,8 @@ async function checkForUpdates() {
     };
     if (compare(remote.version, CURRENT_VERSION) > 0) {
       notice.hidden = false;
-      text.textContent = "Installed: v" + CURRENT_VERSION + " · Latest: v" + remote.version;
-      setStatus("Update available. Open GitHub, download the ZIP, then reload the extension.");
+      text.textContent = "Installed: v" + CURRENT_VERSION + " · Latest on GitHub: v" + remote.version;
+      setStatus("Update available. Open the repository, download the latest ZIP, then reload the extension.");
     } else {
       notice.hidden = true;
       setStatus("You're using v" + CURRENT_VERSION + ". " + (compare(remote.version, CURRENT_VERSION) < 0 ? "GitHub version is older than this build." : "No update found."));
