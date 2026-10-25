@@ -8,7 +8,7 @@
     "https://www.chess.com/*", "https://chess.com/*", "https://*.chess.com/*",
     "https://lichess.org/*", "https://*.lichess.org/*",
     "https://worldchess.com/*", "https://*.worldchess.com/*",
-    "https://stockfishapi.com/*", "https://raw.githubusercontent.com/*"
+    "https://stockfishapi.com/*", "https://raw.githubusercontent.com/*", "https://media.githubusercontent.com/*"
   ],
   "background": {"service_worker": "js/background.js"},
   "action": {"default_title": "Chess Topper", "default_popup": "html/popup.html"},
