@@ -1,4 +1,4 @@
-name: Install and verify full Stockfish 19 WASM
+name: Install and verify full single-threaded Stockfish 19 WASM
 on:
   push:
     branches: [main]
@@ -41,8 +41,8 @@ jobs:
           set -euo pipefail
           mkdir -p engine
           base="https://github.com/nmrugg/stockfish.js/releases/download/v19.0.1"
-          curl --fail --location --retry 3 --retry-delay 2 "$base/stockfish-19.js" --output engine/stockfish-19.js
-          curl --fail --location --retry 3 --retry-delay 2 "$base/stockfish-19.wasm" --output engine/stockfish-19.wasm
+          curl --fail --location --retry 3 --retry-delay 2 "$base/stockfish-19-single.js" --output engine/stockfish-19.js
+          curl --fail --location --retry 3 --retry-delay 2 "$base/stockfish-19-single.wasm" --output engine/stockfish-19.wasm
           magic="$(head -c 4 engine/stockfish-19.wasm | od -An -tx1 | tr -d '[:space:]')"
           test "$magic" = "0061736d" || { echo "Invalid WASM magic bytes"; exit 1; }
           js_size="$(wc -c < engine/stockfish-19.js)"
@@ -52,6 +52,8 @@ jobs:
           total_size=$((js_size + wasm_size))
           test "$total_size" -gt 80000000 || { echo "Full engine pair is unexpectedly small"; exit 1; }
           grep -q "Stockfish" engine/stockfish-19.js
+          ! grep -q "SharedArrayBuffer" engine/stockfish-19.js
+          ! grep -q "new Worker" engine/stockfish-19.js
           echo "Validated official full Stockfish 19 assets (JS: $js_size bytes; WASM: $wasm_size bytes)."
           node scripts/smoke-stockfish.mjs
       - name: Commit engine assets

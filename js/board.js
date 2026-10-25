@@ -18,6 +18,7 @@
     remoteSeq: 0, remoteBusy: false, remoteLastFen: '',
     remoteFailed: false, localFallbackActive: false, localSearchFen: '',
     pendingFallbackFen: '', depthLive: 0,
+    failedEngines: {}, engineStartTimer: null,
   };
 
   const FILES = 'abcdefgh';
@@ -73,7 +74,10 @@
       state.ready = false;
       state.uciReady = false;
     }
+    clearTimeout(state.engineStartTimer);
+    state.engineStartTimer = null;
     state.engineIndex = ((state.engineIndex + delta) % ENGINES.length + ENGINES.length) % ENGINES.length;
+    delete state.failedEngines[ENGINES[state.engineIndex].id];
     $('.ct-eng-name').textContent = ENGINES[state.engineIndex].label;
     status('Loading ' + ENGINES[state.engineIndex].label + '…');
     bootEngine();
@@ -449,6 +453,29 @@ self.onmessage = function(e) {
 
       state.engine = worker;
 
+      const failEngine = reason => {
+        if (state.engine !== worker) return;
+        clearTimeout(state.engineStartTimer);
+        state.engineStartTimer = null;
+        state.failedEngines[def.id] = true;
+        state.engine = null; state.ready = false; state.uciReady = false;
+        try { worker.terminate(); } catch (_) {}
+        console.error('[ChessTopper] Engine failed:', def.label, reason || 'startup timeout');
+
+        const fallback = ENGINES.findIndex(engine => !state.failedEngines[engine.id]);
+        if (fallback >= 0) {
+          state.engineIndex = fallback;
+          $('.ct-eng-name').textContent = ENGINES[fallback].label;
+          chrome.storage?.local?.set({ engineIndex: fallback });
+          status(def.label + ' failed — trying ' + ENGINES[fallback].label + '…');
+          setTimeout(bootEngine, 250);
+        } else {
+          status('No local engine could start. Reload the extension.');
+        }
+      };
+
+      state.engineStartTimer = setTimeout(() => failEngine('startup timeout'), 15000);
+
       worker.onmessage = e => {
         const line = typeof e.data === 'string' ? e.data : '';
         if (!line) return;
@@ -460,6 +487,9 @@ self.onmessage = function(e) {
           return;
         }
         if (line === 'readyok') {
+          clearTimeout(state.engineStartTimer);
+          state.engineStartTimer = null;
+          delete state.failedEngines[def.id];
           state.ready = true;
           status(def.label + ' ready');
           const fen = state.pendingFallbackFen || state.lastFen;
@@ -499,18 +529,10 @@ self.onmessage = function(e) {
 
       worker.onerror = err => {
         console.error('[ChessTopper] Worker error:', err?.message || err);
-        state.engine = null; state.ready = false;
-        // If not already on Stockfish 19, fall back to it
-        if (state.engineIndex !== 0) {
-          status(def.label + ' failed — falling back to Stockfish 19');
-          state.engineIndex = 0;
-          $('.ct-eng-name').textContent = ENGINES[0].label;
-          chrome.storage?.local?.set({ engineIndex: 0 });
-          setTimeout(bootEngine, 200);
-        } else {
-          status('Engine failed to load. Check extension files.');
-        }
+        failEngine(err?.message || 'worker error');
       };
+
+      worker.onmessageerror = () => failEngine('message error');
 
       // Send UCI handshake
       worker.postMessage('uci');
@@ -518,14 +540,19 @@ self.onmessage = function(e) {
     } catch (err) {
       console.error('[ChessTopper] Could not start worker:', err?.message || err);
       state.engine = null;
-      if (state.engineIndex !== 0) {
-        status(def.label + ' unavailable — falling back to Stockfish 19');
-        state.engineIndex = 0;
-        $('.ct-eng-name').textContent = ENGINES[0].label;
-        chrome.storage?.local?.set({ engineIndex: 0 });
-        setTimeout(bootEngine, 200);
+      clearTimeout(state.engineStartTimer);
+      state.engineStartTimer = null;
+      state.failedEngines[def.id] = true;
+      state.ready = false; state.uciReady = false;
+      const fallback = ENGINES.findIndex(engine => !state.failedEngines[engine.id]);
+      if (fallback >= 0) {
+        state.engineIndex = fallback;
+        $('.ct-eng-name').textContent = ENGINES[fallback].label;
+        chrome.storage?.local?.set({ engineIndex: fallback });
+        status(def.label + ' unavailable — trying ' + ENGINES[fallback].label + '…');
+        setTimeout(bootEngine, 250);
       } else {
-        status('Could not start ' + def.label + '. Reload the extension.');
+        status('No local engine could start. Reload the extension.');
       }
     }
   }
