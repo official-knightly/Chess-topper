@@ -1,619 +1,596 @@
 (() => {
-  if (window.__chessTopperLoaded) return; 
+  if (window.__chessTopperLoaded) return;
   window.__chessTopperLoaded = true;
-  
-  // Engine definitions
+
+  // ─── Engine definitions (3 engines — explanation-engine excluded: hardcoded foreign extension ID) ───
   const ENGINES = [
-    {id:'sf19',    label:'Stockfish 19', js:'engine/stockfish-19.js'},
-    {id:'dragon',  label:'Dragon',       js:'engine/dragon.js'},
-    {id:'rodent',  label:'Rodent IV',    js:'engine/rodent/rodent.js'},
-    {id:'explain', label:'Explain Eng',  js:'engine/explanation-engine.js'},
+    { id: 'sf19',   label: 'Stockfish 19', js: 'engine/stockfish-19.js'        },
+    { id: 'dragon', label: 'Dragon',       js: 'engine/dragon.js'              },
+    { id: 'rodent', label: 'Rodent IV',    js: 'engine/rodent/rodent.js'       },
   ];
-  
-  const supportedAnalysisPath = () => true;
+
   const state = {
-    bar:true, arrow:true, depth:16, analysisMode:'auto', 
-    engineIndex:0, // NEW: engine selection
-    score:0, bestmove:null, engine:null, ready:false, lastFen:'', board:null, pv:'', 
-    uciReady:false, remoteSeq:0, remoteBusy:false, remoteLastFen:'', remoteFailed:false, 
-    localFallbackActive:false, localSearchFen:''
+    bar: true, arrow: true, depth: 16, analysisMode: 'auto',
+    engineIndex: 0,
+    score: 0, bestmove: null, engine: null, ready: false,
+    lastFen: '', board: null, pv: '',
+    uciReady: false,
+    remoteSeq: 0, remoteBusy: false, remoteLastFen: '',
+    remoteFailed: false, localFallbackActive: false, localSearchFen: '',
+    pendingFallbackFen: '', depthLive: 0,
   };
-  
-  const files='abcdefgh';
-  
-  // Panel HTML with engine switcher row
-  const panel=document.createElement('div'); 
-  panel.id='chess-topper-panel'; 
-  panel.innerHTML=`
-    <div class="ct-bar">
-      <div class="ct-white"></div>
-      <div class="ct-score">0.0</div>
-    </div>
+
+  const FILES = 'abcdefgh';
+
+  // ─── Panel ───
+  const panel = document.createElement('div');
+  panel.id = 'chess-topper-panel';
+  panel.innerHTML = `
+    <div class="ct-bar"><div class="ct-white"></div><div class="ct-score">0.0</div></div>
     <div class="ct-card">
       <div class="ct-title">♞ Chess Topper</div>
       <div class="ct-line ct-engine">Mode: Auto (server → WASM)</div>
       <div class="ct-line ct-eng-row">
-        <button class="ct-eng-prev">◀</button>
+        <button class="ct-eng-prev" title="Previous engine">◀</button>
         <span class="ct-eng-name">Stockfish 19</span>
-        <button class="ct-eng-next">▶</button>
+        <button class="ct-eng-next" title="Next engine">▶</button>
       </div>
       <div class="ct-line ct-move">Best move: —</div>
       <div class="ct-line ct-eval">Evaluation: —</div>
       <div class="ct-line ct-pv">Line: —</div>
       <div class="ct-line ct-position">Position: waiting…</div>
-      <div class="ct-status">Looking for an analysis board…</div>
+      <div class="ct-status">Looking for a board…</div>
       <button class="ct-toggle">Hide</button>
-    </div>
-  `;
-  
-  const arrowSvg=document.createElementNS('http://www.w3.org/2000/svg','svg'); 
-  arrowSvg.id='chess-topper-arrow'; 
-  arrowSvg.setAttribute('viewBox','0 0 1 1'); 
-  arrowSvg.setAttribute('preserveAspectRatio','none'); 
-  arrowSvg.style.cssText='position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:2147483647;overflow:visible;'; 
-  arrowSvg.innerHTML='<defs><marker id="ct-head" markerUnits="strokeWidth" markerWidth="4" markerHeight="4" refX="9" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#12a66a"/></marker></defs><line id="ct-line" x1="0" y1="0" x2="0" y2="0" stroke="#12a66a" stroke-width="6" stroke-linecap="round" marker-end="url(#ct-head)" opacity="0"/>';
-  
-  document.documentElement.append(panel,arrowSvg);
-  
-  const $=s=>panel.querySelector(s);
-  
-  // Toggle handler
-  $('.ct-toggle').onclick=()=>{
-    const card=$('.ct-card');
-    const hidden=card.style.display==='none';
-    card.style.display=hidden?'':'none';
-    $('.ct-toggle').textContent=hidden?'Hide':'Show';
+    </div>`;
+
+  // ─── Arrow SVG overlay ───
+  const arrowSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  arrowSvg.id = 'chess-topper-arrow';
+  arrowSvg.setAttribute('viewBox', '0 0 1 1');
+  arrowSvg.setAttribute('preserveAspectRatio', 'none');
+  arrowSvg.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:2147483647;overflow:visible;';
+  arrowSvg.innerHTML = `<defs>
+    <marker id="ct-head" markerUnits="strokeWidth" markerWidth="4" markerHeight="4" refX="9" refY="5" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#12a66a"/>
+    </marker>
+  </defs>
+  <line id="ct-line" x1="0" y1="0" x2="0" y2="0" stroke="#12a66a" stroke-width="6"
+    stroke-linecap="round" marker-end="url(#ct-head)" opacity="0"/>`;
+
+  document.documentElement.append(panel, arrowSvg);
+
+  const $ = s => panel.querySelector(s);
+
+  // ─── Hide/Show toggle ───
+  $('.ct-toggle').onclick = () => {
+    const card = $('.ct-card');
+    const hidden = card.style.display === 'none';
+    card.style.display = hidden ? '' : 'none';
+    $('.ct-toggle').textContent = hidden ? 'Hide' : 'Show';
   };
-  
-  // Engine switcher handlers
+
+  // ─── Engine switcher ───
   function switchEngine(delta) {
-    // Terminate old engine
     if (state.engine) {
-      try { state.engine.terminate(); } catch(_) {}
+      try { state.engine.terminate(); } catch (_) {}
       state.engine = null;
       state.ready = false;
       state.uciReady = false;
     }
-    
-    // Cycle index
-    state.engineIndex = ((state.engineIndex + delta) % 4 + 4) % 4;
-    
-    // Update label
+    state.engineIndex = ((state.engineIndex + delta) % ENGINES.length + ENGINES.length) % ENGINES.length;
     $('.ct-eng-name').textContent = ENGINES[state.engineIndex].label;
-    
-    // Boot new engine
+    status('Loading ' + ENGINES[state.engineIndex].label + '…');
     bootEngine();
-    
-    // Persist choice
-    chrome.storage?.local?.set({engineIndex: state.engineIndex});
+    chrome.storage?.local?.set({ engineIndex: state.engineIndex });
   }
-  
+
   $('.ct-eng-prev').onclick = () => switchEngine(-1);
   $('.ct-eng-next').onclick = () => switchEngine(1);
-  
-  // Load settings
-  chrome.storage?.local?.get({analysisMode:'auto',bar:true,arrow:true,depth:16,engineIndex:0},v=>{
-    // Restore engine index
-    state.engineIndex = Math.min(3, Math.max(0, Number(v.engineIndex) || 0));
+
+  // ─── Settings ───
+  chrome.storage?.local?.get({ analysisMode: 'auto', bar: true, arrow: true, depth: 16, engineIndex: 0 }, v => {
+    state.engineIndex = Math.min(ENGINES.length - 1, Math.max(0, Number(v.engineIndex) || 0));
     $('.ct-eng-name').textContent = ENGINES[state.engineIndex].label;
     applySettings(v);
   });
-  
-  chrome.runtime?.onMessage?.addListener(msg=>{
-    if(msg.type==='CHESS_TOPPER_SETTINGS') applySettings(msg.settings);
+
+  chrome.runtime?.onMessage?.addListener(msg => {
+    if (msg.type === 'CHESS_TOPPER_SETTINGS') applySettings(msg.settings);
   });
-  
+
   function applySettings(v) {
-    const next=Object.assign({},state,v||{});
-    const mode=['auto','wasm','server'].includes(next.analysisMode)?next.analysisMode:'auto';
-    const modeChanged=mode!==state.analysisMode;
-    
-    state.bar=next.bar!==false;
-    state.arrow=next.arrow!==false;
-    state.depth=Math.min(20,Math.max(1,Number(next.depth)||16));
-    state.analysisMode=mode;
-    
-    $('.ct-bar').style.display=state.bar?'':'none';
-    arrowSvg.style.display=state.arrow?'':'none';
-    $('.ct-engine').textContent='Mode: '+({
-      auto:'Auto (server → WASM)',
-      wasm:'Local WASM',
-      server:'Server only'
-    }[mode]);
-    
-    if(modeChanged){
-      state.remoteSeq++;
-      state.remoteBusy=false;
-      state.bestmove=null;
-      state.remoteFailed=false;
-      state.pendingFallbackFen='';
+    const next = Object.assign({}, state, v || {});
+    const mode = ['auto', 'wasm', 'server'].includes(next.analysisMode) ? next.analysisMode : 'auto';
+    const modeChanged = mode !== state.analysisMode;
+    state.bar    = next.bar !== false;
+    state.arrow  = next.arrow !== false;
+    state.depth  = Math.min(20, Math.max(1, Number(next.depth) || 16));
+    state.analysisMode = mode;
+    $('.ct-bar').style.display   = state.bar   ? '' : 'none';
+    arrowSvg.style.display       = state.arrow ? '' : 'none';
+    $('.ct-engine').textContent  = 'Mode: ' + ({ auto: 'Auto (server → WASM)', wasm: 'Local WASM', server: 'Server only' }[mode]);
+    if (modeChanged) {
+      state.remoteSeq++; state.remoteBusy = false;
+      state.bestmove = null; state.remoteFailed = false; state.pendingFallbackFen = '';
     }
-    
-    if(state.lastFen){
-      if(mode==='wasm'){
-        if(!state.engine) bootEngine();
-        if(state.engine&&state.ready) analyse(state.lastFen);
-        else state.pendingFallbackFen=state.lastFen;
-      }else{
+    if (state.lastFen) {
+      if (mode === 'wasm') {
+        if (!state.engine) bootEngine();
+        if (state.engine && state.ready) analyse(state.lastFen);
+        else state.pendingFallbackFen = state.lastFen;
+      } else {
         remoteAnalyse(state.lastFen);
       }
     }
   }
-  
-  function status(t){$('.ct-status').textContent=t}
-  
-  function findBoard(){
+
+  function status(t) { $('.ct-status').textContent = t; }
+
+  // ─── Board detection (chess.com, lichess, worldchess) ───
+  function findBoard() {
     return document.querySelector('cg-board')
-      ||document.querySelector('wc-chess-board')
-      ||document.querySelector('chess-board')
-      ||document.querySelector('.main-board .board')
-      ||document.querySelector('[data-board]')
-      ||document.querySelector('.board');
+      || document.querySelector('wc-chess-board')
+      || document.querySelector('chess-board')
+      || document.querySelector('.main-board .board')
+      || document.querySelector('[data-board]')
+      || document.querySelector('.board');
   }
-  
-  function squareFromTransform(el, board, lichess){
-    const r=board.getBoundingClientRect(),pr=el.getBoundingClientRect();
-    if(lichess){
-      const t=el.style.transform||getComputedStyle(el).transform;
-      const m=t.match(/translate\(([-\d.]+)px,\s*([-\d.]+)px\)/);
-      if(m){
-        const sq=Math.min(r.width,r.height)/8;
-        return [Math.round(parseFloat(m[1])/sq),Math.round(parseFloat(m[2])/sq)];
+
+  function squareFromTransform(el, board, lichess) {
+    const r = board.getBoundingClientRect(), pr = el.getBoundingClientRect();
+    if (lichess) {
+      const t = el.style.transform || getComputedStyle(el).transform;
+      const m = t.match(/translate\(([-\d.]+)px,\s*([-\d.]+)px\)/);
+      if (m) {
+        const sq = Math.min(r.width, r.height) / 8;
+        return [Math.round(parseFloat(m[1]) / sq), Math.round(parseFloat(m[2]) / sq)];
       }
     }
     return [
-      Math.floor((pr.left-r.left+r.width/16)/(r.width/8)),
-      Math.floor((pr.top-r.top+r.height/16)/(r.height/8))
+      Math.floor((pr.left - r.left + r.width  / 16) / (r.width  / 8)),
+      Math.floor((pr.top  - r.top  + r.height / 16) / (r.height / 8)),
     ];
   }
-  
-  function validFen(value){
-    if(typeof value!=='string')return null;
-    const parts=value.trim().split(/\s+/);
-    if(parts.length<4||parts.length>6)return null;
-    const ranks=parts[0].split('/');
-    if(ranks.length!==8||!ranks.every(rank=>{
-      let n=0;
-      for(const c of rank){
-        if(/[1-8]/.test(c))n+=Number(c);
-        else if(/[prnbqkPRNBQK]/.test(c))n++;
+
+  function validFen(value) {
+    if (typeof value !== 'string') return null;
+    const parts = value.trim().split(/\s+/);
+    if (parts.length < 4 || parts.length > 6) return null;
+    const ranks = parts[0].split('/');
+    if (ranks.length !== 8 || !ranks.every(rank => {
+      let n = 0;
+      for (const c of rank) {
+        if (/[1-8]/.test(c)) n += Number(c);
+        else if (/[prnbqkPRNBQK]/.test(c)) n++;
         else return false;
       }
-      return n===8;
+      return n === 8;
     })) return null;
-    if(!/^[wb]$/.test(parts[1])||!/^(-|K?Q?k?q?)$/.test(parts[2])||!/^(-|[a-h][36])$/.test(parts[3]))return null;
-    const half=parts[4]??'0',full=parts[5]??'1';
-    if(!/^\d+$/.test(half)||!/^\d+$/.test(full)||Number(full)<1)return null;
-    return parts[0]+' '+parts[1]+' '+parts[2]+' '+parts[3]+' '+half+' '+full;
+    if (!/^[wb]$/.test(parts[1]) || !/^(-|K?Q?k?q?)$/.test(parts[2]) || !/^(-|[a-h][36])$/.test(parts[3])) return null;
+    const half = parts[4] ?? '0', full = parts[5] ?? '1';
+    if (!/^\d+$/.test(half) || !/^\d+$/.test(full) || Number(full) < 1) return null;
+    return parts[0] + ' ' + parts[1] + ' ' + parts[2] + ' ' + parts[3] + ' ' + half + ' ' + full;
   }
-  
-  function readNativeFen(board){
-    const hosts=[board,board.closest('chess-board'),board.closest('[data-fen]')].filter(Boolean);
-    for(const host of hosts){
-      for(const attr of ['data-fen','fen','data-position','position']){
-        const fen=validFen(host.getAttribute?.(attr));
-        if(fen)return fen;
+
+  function readNativeFen(board) {
+    const hosts = [board, board.closest('chess-board'), board.closest('[data-fen]')].filter(Boolean);
+    for (const host of hosts) {
+      for (const attr of ['data-fen', 'fen', 'data-position', 'position']) {
+        const fen = validFen(host.getAttribute?.(attr));
+        if (fen) return fen;
       }
-      for(const getter of [
-        ()=>host.fen,
-        ()=>host.positionFen,
-        ()=>host.game?.getFEN?.(),
-        ()=>host.game?.getFen?.(),
-        ()=>host.game?.fen,
-        ()=>host.getFEN?.(),
-        ()=>host.getFen?.()
-      ]){
-        try{
-          const fen=validFen(getter());
-          if(fen)return fen;
-        }catch(_){}
+      for (const getter of [
+        () => host.fen, () => host.positionFen,
+        () => host.game?.getFEN?.(), () => host.game?.getFen?.(),
+        () => host.game?.fen, () => host.getFEN?.(), () => host.getFen?.(),
+      ]) {
+        try { const fen = validFen(getter()); if (fen) return fen; } catch (_) {}
       }
     }
     return null;
   }
-  
-  function readTurn(board){
-    const values=[
-      board.getAttribute('data-turn'),
-      board.getAttribute('data-side-to-move'),
-      board.getAttribute('turn')
-    ];
-    for(const value of values){
-      if(/^b(lack)?$/i.test(value||''))return 'b';
-      if(/^w(hite)?$/i.test(value||''))return 'w';
+
+  function readTurn(board) {
+    for (const attr of ['data-turn', 'data-side-to-move', 'turn']) {
+      const v = board.getAttribute(attr);
+      if (/^b(lack)?$/i.test(v || '')) return 'b';
+      if (/^w(hite)?$/i.test(v || '')) return 'w';
     }
-    const context=board.closest('.orientation-white,.orientation-black,.turn-white,.turn-black,[data-turn]')||board.parentElement;
-    const cls=(context?.className&&typeof context.className==='string'?context.className:'').toLowerCase();
-    if(/turn-black|black-to-move|side-black/.test(cls))return 'b';
-    if(/turn-white|white-to-move|side-white/.test(cls))return 'w';
-    if(document.querySelector('.clock-black.running,.clock-black.active,[data-clock="black"].active'))return 'b';
-    if(document.querySelector('.clock-white.running,.clock-white.active,[data-clock="white"].active'))return 'w';
+    const ctx = board.closest('.orientation-white,.orientation-black,.turn-white,.turn-black,[data-turn]') || board.parentElement;
+    const cls = (ctx?.className && typeof ctx.className === 'string' ? ctx.className : '').toLowerCase();
+    if (/turn-black|black-to-move|side-black/.test(cls)) return 'b';
+    if (/turn-white|white-to-move|side-white/.test(cls)) return 'w';
+    if (document.querySelector('.clock-black.running,.clock-black.active,[data-clock="black"].active')) return 'b';
+    if (document.querySelector('.clock-white.running,.clock-white.active,[data-clock="white"].active')) return 'w';
     return null;
   }
-  
-  function readPosition(){
-    const b=findBoard();
-    if(!b)return null;
-    state.board=b;
-    const r=b.getBoundingClientRect();
-    if(r.width<100||r.height<100)return null;
-    
-    const lichess=!!b.matches('cg-board')||!!b.querySelector('piece.white, piece.black');
-    const nativeFen=readNativeFen(b);
-    if(nativeFen)return {fen:nativeFen,board:b,lichess,fenComplete:true};
-    
-    const grid=Array.from({length:8},()=>Array(8).fill(null));
-    const pieces=Array.from(b.querySelectorAll('piece, .piece, [data-piece]'));
-    const blackOrientation=isBlackOrientation(b);
-    
-    for(const p of pieces){
-      let piece='',sqfile=-1,sqrank=-1;
-      const cls=(p.className&&typeof p.className==='string'?p.className:'')+' '+(p.getAttribute('data-piece')||'');
-      
-      if(lichess){
-        const c=cls.toLowerCase();
-        const color=/\bwhite\b/.test(c)?'w':/\bblack\b/.test(c)?'b':'';
-        const type=(c.match(/\b(king|queen|rook|bishop|knight|pawn)\b/i)||[])[1];
-        if(color&&type){
-          piece=color+({king:'k',queen:'q',rook:'r',bishop:'b',knight:'n',pawn:'p'}[type.toLowerCase()]);
-          const [x,y]=squareFromTransform(p,b,true);
-          sqfile=blackOrientation?7-x:x;
-          sqrank=blackOrientation?y:7-y;
-        }
-      }else{
-        const pc=cls.match(/\b([wb])([KQRBNP])\b/i);
-        const coord=cls.match(/\bsquare-([1-8])([1-8])\b/);
-        const numeric=cls.match(/\bsquare-(\d{1,2})\b/);
-        if(pc){
-          piece=pc[1].toLowerCase()+pc[2].toLowerCase();
-          if(coord){
-            sqfile=Number(coord[1])-1;
-            sqrank=Number(coord[2])-1;
-          }else if(numeric&&Number(numeric[1])>=1&&Number(numeric[1])<=64){
-            const n=Number(numeric[1])-1;
-            sqfile=n%8;
-            sqrank=7-Math.floor(n/8);
-          }
-        }
-      }
-      
-      if(piece&&sqfile>=0&&sqfile<8&&sqrank>=0&&sqrank<8) grid[sqrank][sqfile]=piece;
-    }
-    
-    if(!pieces.length||grid.flat().filter(Boolean).length<2)return null;
-    
-    const rows=grid.slice().reverse().map(row=>{
-      let out='',empty=0;
-      for(const p of row){
-        if(!p)empty++;
-        else{
-          if(empty)out+=empty;
-          out+=p;
-          empty=0;
-        }
-      }
-      if(empty)out+=empty;
-      return out;
-    }).join('/');
-    
-    const turn=readTurn(b);
-    return {fen:rows+' '+(turn||'w')+' - - 0 1',board:b,lichess,fenComplete:false,turnKnown:!!turn};
-  }
-  
-  function isBlackOrientation(board){
-    let el=board;
-    while(el&&el.nodeType===1){
-      const cls=typeof el.className==='string'?el.className:(el.className?.baseVal||'');
-      const orientation=el.getAttribute?.('data-orientation')||el.getAttribute?.('orientation')||'';
-      if(/\b(?:orientation-black|flipped|black-orientation)\b/i.test(cls)||/^black$/i.test(orientation))return true;
-      el=el.parentElement;
+
+  function isBlackOrientation(board) {
+    let el = board;
+    while (el && el.nodeType === 1) {
+      const cls = typeof el.className === 'string' ? el.className : (el.className?.baseVal || '');
+      const ori = el.getAttribute?.('data-orientation') || el.getAttribute?.('orientation') || '';
+      if (/\b(?:orientation-black|flipped|black-orientation)\b/i.test(cls) || /^black$/i.test(ori)) return true;
+      el = el.parentElement;
     }
     return false;
   }
-  
-  function squareCenter(sq){
-    if(!state.board)return null;
-    const r=state.board.getBoundingClientRect();
-    let f=files.indexOf(sq[0]),rank=Number(sq[1]);
-    if(f<0||rank<1||rank>8)return null;
-    if(isBlackOrientation(state.board)){
-      f=7-f;
-      rank=9-rank;
+
+  function readPosition() {
+    const b = findBoard();
+    if (!b) return null;
+    state.board = b;
+    const r = b.getBoundingClientRect();
+    if (r.width < 100 || r.height < 100) return null;
+    const lichess = !!b.matches('cg-board') || !!b.querySelector('piece.white, piece.black');
+    const nativeFen = readNativeFen(b);
+    if (nativeFen) return { fen: nativeFen, board: b, lichess, fenComplete: true };
+
+    const grid = Array.from({ length: 8 }, () => Array(8).fill(null));
+    const pieces = Array.from(b.querySelectorAll('piece, .piece, [data-piece]'));
+    const blackOri = isBlackOrientation(b);
+    for (const p of pieces) {
+      let piece = '', sqfile = -1, sqrank = -1;
+      const cls = (p.className && typeof p.className === 'string' ? p.className : '') + ' ' + (p.getAttribute('data-piece') || '');
+      if (lichess) {
+        const c = cls.toLowerCase();
+        const color = /\bwhite\b/.test(c) ? 'w' : /\bblack\b/.test(c) ? 'b' : '';
+        const type = (c.match(/\b(king|queen|rook|bishop|knight|pawn)\b/i) || [])[1];
+        if (color && type) {
+          piece = color + ({ king: 'k', queen: 'q', rook: 'r', bishop: 'b', knight: 'n', pawn: 'p' }[type.toLowerCase()]);
+          const [x, y] = squareFromTransform(p, b, true);
+          sqfile = blackOri ? 7 - x : x;
+          sqrank = blackOri ? y : 7 - y;
+        }
+      } else {
+        const pc = cls.match(/\b([wb])([KQRBNP])\b/i);
+        const coord = cls.match(/\bsquare-([1-8])([1-8])\b/);
+        const numeric = cls.match(/\bsquare-(\d{1,2})\b/);
+        if (pc) {
+          piece = pc[1].toLowerCase() + pc[2].toLowerCase();
+          if (coord) { sqfile = Number(coord[1]) - 1; sqrank = Number(coord[2]) - 1; }
+          else if (numeric && Number(numeric[1]) >= 1 && Number(numeric[1]) <= 64) {
+            const n = Number(numeric[1]) - 1;
+            sqfile = n % 8; sqrank = 7 - Math.floor(n / 8);
+          }
+        }
+      }
+      if (piece && sqfile >= 0 && sqfile < 8 && sqrank >= 0 && sqrank < 8) grid[sqrank][sqfile] = piece;
     }
-    return {x:r.left+(f+.5)*r.width/8,y:r.top+(8-rank+.5)*r.height/8};
+    if (!pieces.length || grid.flat().filter(Boolean).length < 2) return null;
+
+    const rows = grid.slice().reverse().map(row => {
+      let out = '', empty = 0;
+      for (const p of row) { if (!p) empty++; else { if (empty) out += empty; out += p; empty = 0; } }
+      if (empty) out += empty;
+      return out;
+    }).join('/');
+    const turn = readTurn(b);
+    return { fen: rows + ' ' + (turn || 'w') + ' - - 0 1', board: b, lichess, fenComplete: false, turnKnown: !!turn };
   }
-  
-  function drawArrow(move){
-    const line=arrowSvg.querySelector('#ct-line');
-    if(!move||!/^[a-h][1-8][a-h][1-8][qrbn]?$/i.test(move)||!state.board){
-      line.setAttribute('opacity','0');
-      return;
-    }
-    
-    const a=squareCenter(move.slice(0,2)),b=squareCenter(move.slice(2,4));
-    if(!a||!b){
-      line.setAttribute('opacity','0');
-      return;
-    }
-    
-    const dx=b.x-a.x,dy=b.y-a.y,length=Math.hypot(dx,dy);
-    if(!length){
-      line.setAttribute('opacity','0');
-      return;
-    }
-    
-    const rect=state.board.getBoundingClientRect(),square=Math.min(rect.width,rect.height)/8;
-    const startGap=Math.min(square*.18,length*.16),endGap=Math.min(square*.28,length*.24);
-    const vw=window.innerWidth,vh=window.innerHeight;
-    
-    arrowSvg.setAttribute('viewBox',`0 0 ${vw} ${vh}`);
-    line.setAttribute('x1',a.x+dx/length*startGap);
-    line.setAttribute('y1',a.y+dy/length*startGap);
-    line.setAttribute('x2',b.x-dx/length*endGap);
-    line.setAttribute('y2',b.y-dy/length*endGap);
-    line.setAttribute('stroke-width',Math.max(3,Math.min(7,square*.075)));
-    line.setAttribute('opacity',state.arrow?'0.92':'0');
+
+  function squareCenter(sq) {
+    if (!state.board) return null;
+    const r = state.board.getBoundingClientRect();
+    let f = FILES.indexOf(sq[0]), rank = Number(sq[1]);
+    if (f < 0 || rank < 1 || rank > 8) return null;
+    if (isBlackOrientation(state.board)) { f = 7 - f; rank = 9 - rank; }
+    return { x: r.left + (f + .5) * r.width / 8, y: r.top + (8 - rank + .5) * r.height / 8 };
   }
-  
-  function updateScore(cp){
-    state.score=cp;
-    const pawns=cp/100,clamped=Math.max(-10,Math.min(10,pawns));
-    $('.ct-white').style.height=(50+clamped*4.5)+'%';
-    const txt=(pawns>0?'+':'')+pawns.toFixed(1);
-    $('.ct-score').textContent=txt;
-    $('.ct-eval').textContent='Evaluation: '+txt;
+
+  function drawArrow(move) {
+    const line = arrowSvg.querySelector('#ct-line');
+    if (!move || !/^[a-h][1-8][a-h][1-8][qrbn]?$/i.test(move) || !state.board) {
+      line.setAttribute('opacity', '0'); return;
+    }
+    const a = squareCenter(move.slice(0, 2)), b = squareCenter(move.slice(2, 4));
+    if (!a || !b) { line.setAttribute('opacity', '0'); return; }
+    const dx = b.x - a.x, dy = b.y - a.y, len = Math.hypot(dx, dy);
+    if (!len) { line.setAttribute('opacity', '0'); return; }
+    const rect = state.board.getBoundingClientRect(), sq = Math.min(rect.width, rect.height) / 8;
+    const s0 = Math.min(sq * .18, len * .16), s1 = Math.min(sq * .28, len * .24);
+    arrowSvg.setAttribute('viewBox', `0 0 ${window.innerWidth} ${window.innerHeight}`);
+    line.setAttribute('x1', a.x + dx / len * s0);
+    line.setAttribute('y1', a.y + dy / len * s0);
+    line.setAttribute('x2', b.x - dx / len * s1);
+    line.setAttribute('y2', b.y - dy / len * s1);
+    line.setAttribute('stroke-width', Math.max(3, Math.min(7, sq * .075)));
+    line.setAttribute('opacity', state.arrow ? '0.92' : '0');
   }
-  
-  function bootEngine(){
-    if(state.engine||!supportedAnalysisPath())return;
-    
-    const engineDef = ENGINES[state.engineIndex];
-    const enginePath = engineDef.js;
-    const engineLabel = engineDef.label;
-    
+
+  function updateScore(cp) {
+    state.score = cp;
+    const pawns = cp / 100, clamped = Math.max(-10, Math.min(10, pawns));
+    $('.ct-white').style.height = (50 + clamped * 4.5) + '%';
+    const txt = (pawns > 0 ? '+' : '') + pawns.toFixed(1);
+    $('.ct-score').textContent = txt;
+    $('.ct-eval').textContent = 'Evaluation: ' + txt;
+  }
+
+  // ─── Rodent UCI wrapper ───────────────────────────────────────────────────
+  // Rodent uses Emscripten Module pattern — NOT a direct Worker UCI script.
+  // We wrap it in a blob Worker that loads it as a module and bridges UCI.
+  function makeRodentWorkerBlob(rodentUrl) {
+    const src = `
+const rodentUrl = ${JSON.stringify(rodentUrl)};
+let engine = null;
+let pendingCmds = [];
+
+// Load Rodent as an importScripts-style classic script
+importScripts(rodentUrl);
+
+// After importScripts, Module is available globally
+// Boot the Emscripten module
+const mod = Module;
+mod.onRuntimeInitialized = function() {
+  engine = mod;
+  // flush queued commands
+  for (const cmd of pendingCmds) sendCmd(cmd);
+  pendingCmds = [];
+};
+
+// Rodent outputs via Module.print
+mod.print = function(line) {
+  postMessage(line);
+};
+mod.printErr = function() {};
+
+function sendCmd(cmd) {
+  if (!engine) { pendingCmds.push(cmd); return; }
+  try {
+    // Rodent Emscripten exposes callMain or processCommand
+    if (typeof engine.ccall === 'function') {
+      engine.ccall('send_command', null, ['string'], [cmd]);
+    } else if (typeof engine.FS !== 'undefined') {
+      // write to stdin pipe
+      const encoder = new TextEncoder();
+      engine.FS.write(engine.FS.streams[0], encoder.encode(cmd + '\\n'), 0, cmd.length + 1);
+    }
+  } catch(e) {
+    // fallback: try processCommand if available
+    if (typeof engine.processCommand === 'function') {
+      engine.processCommand(cmd);
+    }
+  }
+}
+
+self.onmessage = function(e) {
+  sendCmd(e.data);
+};
+`;
+    return new Blob([src], { type: 'application/javascript' });
+  }
+
+  // ─── Boot engine ──────────────────────────────────────────────────────────
+  function bootEngine() {
+    if (state.engine) return;
+
+    const def = ENGINES[state.engineIndex];
+    const url = chrome.runtime.getURL(def.js);
+    status('Loading ' + def.label + '…');
+
     try {
-      const worker=new Worker(chrome.runtime.getURL(enginePath));
-      state.engine=worker;
-      
-      worker.onmessage=e=>{
-        const line=typeof e.data==='string'?e.data:'';
-        
-        if(line==='uciok'){
-          state.uciReady=true;
+      let worker;
+
+      if (def.id === 'rodent') {
+        // Rodent needs a wrapper blob because it's an Emscripten Module, not a plain Worker script
+        const blob = makeRodentWorkerBlob(url);
+        const blobUrl = URL.createObjectURL(blob);
+        worker = new Worker(blobUrl);
+        URL.revokeObjectURL(blobUrl);
+      } else {
+        // Stockfish 19 and Dragon are plain Worker scripts
+        worker = new Worker(url);
+      }
+
+      state.engine = worker;
+
+      worker.onmessage = e => {
+        const line = typeof e.data === 'string' ? e.data : '';
+        if (!line) return;
+
+        if (line === 'uciok') {
+          state.uciReady = true;
           worker.postMessage('setoption name Threads value 1');
           worker.postMessage('isready');
           return;
         }
-        
-        if(line==='readyok'){
-          state.ready=true;
-          status(engineLabel+' ready');
-          if(state.pendingFallbackFen||state.lastFen){
-            const fen=state.pendingFallbackFen||state.lastFen;
-            state.pendingFallbackFen='';
-            analyse(fen);
-          }
+        if (line === 'readyok') {
+          state.ready = true;
+          status(def.label + ' ready');
+          const fen = state.pendingFallbackFen || state.lastFen;
+          if (fen) { state.pendingFallbackFen = ''; analyse(fen); }
           return;
         }
-        
-        if(state.analysisMode!=='wasm'&&!state.localFallbackActive)return;
-        if(state.localSearchFen&&state.localSearchFen!==state.lastFen)return;
-        
-        const depth=line.match(/\bdepth (\d+)/);
-        if(depth) state.depthLive=Number(depth[1]);
-        
-        const cp=line.match(/\bscore cp (-?\d+)/);
-        const mate=line.match(/\bscore mate (-?\d+)/);
-        const pv=line.match(/\bpv (.+)$/);
-        
-        if(cp) updateScore(Number(cp[1]));
-        if(mate){
-          $('.ct-eval').textContent='Evaluation: Mate in '+mate[1];
-          $('.ct-score').textContent='M'+mate[1];
+
+        // Only process engine output when we want local analysis
+        if (state.analysisMode !== 'wasm' && !state.localFallbackActive) return;
+        if (state.localSearchFen && state.localSearchFen !== state.lastFen) return;
+
+        const depth = line.match(/\bdepth (\d+)/);
+        if (depth) state.depthLive = Number(depth[1]);
+
+        const cp   = line.match(/\bscore cp (-?\d+)/);
+        const mate = line.match(/\bscore mate (-?\d+)/);
+        const pv   = line.match(/\bpv (.+)$/);
+
+        if (cp) updateScore(Number(cp[1]));
+        if (mate) {
+          $('.ct-eval').textContent  = 'Evaluation: Mate in ' + mate[1];
+          $('.ct-score').textContent = 'M' + mate[1];
         }
-        if(pv){
-          state.pv=pv[1].trim();
-          $('.ct-pv').textContent='Line: '+state.pv.split(/\s+/).slice(0,7).join(' ');
+        if (pv) {
+          state.pv = pv[1].trim();
+          $('.ct-pv').textContent = 'Line: ' + state.pv.split(/\s+/).slice(0, 7).join(' ');
         }
-        
-        const bm=line.match(/\bbestmove ([a-h][1-8][a-h][1-8][qrbn]?)/);
-        if(bm){
-          state.bestmove=bm[1];
-          $('.ct-move').textContent='Best move: '+bm[1];
+
+        const bm = line.match(/\bbestmove ([a-h][1-8][a-h][1-8][qrbn]?)/);
+        if (bm) {
+          state.bestmove = bm[1];
+          $('.ct-move').textContent = 'Best move: ' + bm[1];
           drawArrow(bm[1]);
-          status(engineLabel+' analysis ready · depth '+(state.depthLive||state.depth));
+          status(def.label + ' ✓ depth ' + (state.depthLive || state.depth));
         }
       };
-      
-      worker.onerror=(err)=>{
-        console.error('Engine error:', err);
-        status(engineLabel+' failed to load. Trying Stockfish 19...');
-        state.ready=false;
-        state.engine=null;
-        
-        // Fallback to Stockfish 19 on error
-        if(state.engineIndex !== 0) {
+
+      worker.onerror = err => {
+        console.error('[ChessTopper] Worker error:', err?.message || err);
+        state.engine = null; state.ready = false;
+        // If not already on Stockfish 19, fall back to it
+        if (state.engineIndex !== 0) {
+          status(def.label + ' failed — falling back to Stockfish 19');
           state.engineIndex = 0;
           $('.ct-eng-name').textContent = ENGINES[0].label;
-          chrome.storage?.local?.set({engineIndex: 0});
-          setTimeout(() => bootEngine(), 100);
+          chrome.storage?.local?.set({ engineIndex: 0 });
+          setTimeout(bootEngine, 200);
+        } else {
+          status('Engine failed to load. Check extension files.');
         }
       };
-      
+
+      // Send UCI handshake
       worker.postMessage('uci');
-      setTimeout(()=>{
-        if(!state.ready) status('Loading '+engineLabel+'…');
-      },800);
-      
-    } catch(err) {
-      console.error('Worker creation failed:', err);
-      status('Could not start '+engineLabel+'.');
-      
-      // Fallback to Stockfish 19 on error
-      if(state.engineIndex !== 0) {
+
+    } catch (err) {
+      console.error('[ChessTopper] Could not start worker:', err?.message || err);
+      state.engine = null;
+      if (state.engineIndex !== 0) {
+        status(def.label + ' unavailable — falling back to Stockfish 19');
         state.engineIndex = 0;
         $('.ct-eng-name').textContent = ENGINES[0].label;
-        chrome.storage?.local?.set({engineIndex: 0});
-        setTimeout(() => bootEngine(), 100);
+        chrome.storage?.local?.set({ engineIndex: 0 });
+        setTimeout(bootEngine, 200);
+      } else {
+        status('Could not start ' + def.label + '. Reload the extension.');
       }
     }
   }
-  
-  function analyse(fen){
-    if(!state.engine||!fen)return;
-    state.localSearchFen=fen;
+
+  function analyse(fen) {
+    if (!state.engine || !fen) return;
+    state.localSearchFen = fen;
     state.engine.postMessage('stop');
-    state.engine.postMessage('position fen '+fen);
-    state.engine.postMessage('go depth '+state.depth);
+    state.engine.postMessage('position fen ' + fen);
+    state.engine.postMessage('go depth ' + state.depth);
   }
-  
-  function readRemoteScore(data){
-    const value=data?.eval??data?.evaluation??data?.score??data?.pvs?.[0]?.eval;
-    if(value&&typeof value==='object'){
-      if(value.type==='mate'&&Number.isFinite(value.value))return {cp:null,mate:value.value};
-      if(value.type==='cp'&&Number.isFinite(value.value))return {cp:value.value,mate:null};
-      if(Number.isFinite(value.cp))return {cp:value.cp,mate:null};
-      if(Number.isFinite(value.mate))return {cp:null,mate:value.mate};
-      if(Number.isFinite(value.value))return {cp:value.value,mate:null};
+
+  // ─── Remote analysis (server Stockfish) ──────────────────────────────────
+  function readRemoteScore(data) {
+    const value = data?.eval ?? data?.evaluation ?? data?.score ?? data?.pvs?.[0]?.eval;
+    if (value && typeof value === 'object') {
+      if (value.type === 'mate' && Number.isFinite(value.value)) return { cp: null, mate: value.value };
+      if (value.type === 'cp'   && Number.isFinite(value.value)) return { cp: value.value, mate: null };
+      if (Number.isFinite(value.cp))   return { cp: value.cp,    mate: null };
+      if (Number.isFinite(value.mate)) return { cp: null,        mate: value.mate };
+      if (Number.isFinite(value.value)) return { cp: value.value, mate: null };
     }
-    if(typeof value==='number'&&Number.isFinite(value))return {cp:Math.abs(value)>100?value:value*100,mate:null};
-    if(Number.isFinite(data?.cp))return {cp:data.cp,mate:null};
-    if(Number.isFinite(data?.mate))return {cp:null,mate:data.mate};
+    if (typeof value === 'number' && Number.isFinite(value)) return { cp: Math.abs(value) > 100 ? value : value * 100, mate: null };
+    if (Number.isFinite(data?.cp))   return { cp: data.cp,   mate: null };
+    if (Number.isFinite(data?.mate)) return { cp: null,      mate: data.mate };
     return null;
   }
-  
-  function remotePv(data){
-    const candidate=data?.pv ?? data?.bestline ?? data?.line ?? data?.continuation ?? data?.principal_variation ?? data?.pvs?.[0]?.moves ?? data?.pvs?.[0]?.pv ?? data?.lines?.[0]?.pv;
-    if(Array.isArray(candidate)) return candidate.join(' ');
-    if(typeof candidate==='string') return candidate;
-    if(Array.isArray(data?.pvs) && typeof data.pvs[0]==='string') return data.pvs[0];
+
+  function remotePv(data) {
+    const c = data?.pv ?? data?.bestline ?? data?.line ?? data?.continuation
+      ?? data?.principal_variation ?? data?.pvs?.[0]?.moves ?? data?.pvs?.[0]?.pv ?? data?.lines?.[0]?.pv;
+    if (Array.isArray(c)) return c.join(' ');
+    if (typeof c === 'string') return c;
+    if (Array.isArray(data?.pvs) && typeof data.pvs[0] === 'string') return data.pvs[0];
     return '';
   }
-  
-  async function remoteAnalyse(fen){
-    const seq=++state.remoteSeq;
-    state.remoteLastFen=fen;
-    state.remoteBusy=true;
-    state.localFallbackActive=false;
-    state.localSearchFen='';
-    
-    if(state.engine&&state.ready){
-      try{state.engine.postMessage('stop')}catch(_){}
-    }
-    
+
+  async function remoteAnalyse(fen) {
+    const seq = ++state.remoteSeq;
+    state.remoteLastFen = fen;
+    state.remoteBusy = true;
+    state.localFallbackActive = false;
+    state.localSearchFen = '';
+    if (state.engine && state.ready) try { state.engine.postMessage('stop'); } catch (_) {}
     status('Requesting server Stockfish…');
-    
     try {
-      const result=await chrome.runtime.sendMessage({
-        type:'CT_REMOTE_ANALYZE',
-        fen,
-        depth:Math.min(14,Math.max(1,state.depth)),
-        multipv:2
+      const result = await chrome.runtime.sendMessage({
+        type: 'CT_REMOTE_ANALYZE', fen,
+        depth: Math.min(14, Math.max(1, state.depth)), multipv: 2,
       });
-      
-      if(seq!==state.remoteSeq || fen!==state.lastFen)return;
-      if(!result?.ok) throw new Error(result?.error||'Server analysis failed');
-      
-      const data=result.data||{};
-      const bestRaw=String(data.bestmove||data.best_move||data.move||'').trim().replace(/^bestmove\s+/i,'');
-      const best=bestRaw.match(/^[a-h][1-8][a-h][1-8][qrbn]?/i)?.[0]||'';
-      
-      if(!/^[a-h][1-8][a-h][1-8][qrbn]?$/i.test(best)) throw new Error('API response did not include a valid best move');
-      
-      const score=readRemoteScore(data);
-      if(score?.cp!==null && score?.cp!==undefined) updateScore(score.cp);
-      else if(score?.mate!==null && score?.mate!==undefined){
-        $('.ct-eval').textContent='Evaluation: Mate in '+score.mate;
-        $('.ct-score').textContent='M'+score.mate;
+      if (seq !== state.remoteSeq || fen !== state.lastFen) return;
+      if (!result?.ok) throw new Error(result?.error || 'Server analysis failed');
+      const data = result.data || {};
+      const bestRaw = String(data.bestmove || data.best_move || data.move || '').trim().replace(/^bestmove\s+/i, '');
+      const best = bestRaw.match(/^[a-h][1-8][a-h][1-8][qrbn]?/i)?.[0] || '';
+      if (!/^[a-h][1-8][a-h][1-8][qrbn]?$/i.test(best)) throw new Error('No valid best move in API response');
+      const score = readRemoteScore(data);
+      if (score?.cp != null) updateScore(score.cp);
+      else if (score?.mate != null) {
+        $('.ct-eval').textContent  = 'Evaluation: Mate in ' + score.mate;
+        $('.ct-score').textContent = 'M' + score.mate;
       }
-      
-      state.bestmove=best;
-      const pv=remotePv(data)||best;
-      state.pv=pv;
-      
-      $('.ct-move').textContent='Best move: '+best;
-      $('.ct-pv').textContent='Line: '+pv.split(/\s+/).slice(0,7).join(' ');
+      state.bestmove = best;
+      const pv = remotePv(data) || best;
+      state.pv = pv;
+      $('.ct-move').textContent = 'Best move: ' + best;
+      $('.ct-pv').textContent   = 'Line: ' + pv.split(/\s+/).slice(0, 7).join(' ');
       drawArrow(best);
-      status('Server Stockfish ready · depth '+(data.depth||Math.min(14,state.depth)));
-      state.remoteFailed=false;
-      
-    } catch(error) {
-      if(seq!==state.remoteSeq || fen!==state.lastFen)return;
-      state.remoteFailed=true;
-      
-      if(state.analysisMode==='server'){
-        status('Server analysis failed: '+(error?.message||'request failed'));
-        return;
+      status('Server Stockfish ✓ depth ' + (data.depth || Math.min(14, state.depth)));
+      state.remoteFailed = false;
+    } catch (error) {
+      if (seq !== state.remoteSeq || fen !== state.lastFen) return;
+      state.remoteFailed = true;
+      if (state.analysisMode === 'server') {
+        status('Server failed: ' + (error?.message || 'request failed')); return;
       }
-      
-      state.localFallbackActive=true;
-      status('Server slow/unavailable; switching to local WASM…');
-      
-      if(!state.engine) bootEngine();
-      if(state.engine){
-        if(state.ready) analyse(fen);
-        else state.pendingFallbackFen=fen;
-      }
-      
+      state.localFallbackActive = true;
+      status('Server unavailable — using local WASM…');
+      if (!state.engine) bootEngine();
+      if (state.engine) { if (state.ready) analyse(fen); else state.pendingFallbackFen = fen; }
     } finally {
-      if(seq===state.remoteSeq) state.remoteBusy=false;
+      if (seq === state.remoteSeq) state.remoteBusy = false;
     }
   }
-  
-  let observedBoard=null,boardResizeObserver=null;
-  
-  function observeBoard(board){
-    if(!board||board===observedBoard)return;
-    observedBoard=board;
-    if(boardResizeObserver)boardResizeObserver.disconnect();
-    if(typeof ResizeObserver==='function'){
-      boardResizeObserver=new ResizeObserver(()=>{
-        if(state.bestmove&&state.board===observedBoard)drawArrow(state.bestmove);
+
+  // ─── Board resize observer ────────────────────────────────────────────────
+  let observedBoard = null, boardResizeObs = null;
+  function observeBoard(board) {
+    if (!board || board === observedBoard) return;
+    observedBoard = board;
+    if (boardResizeObs) boardResizeObs.disconnect();
+    if (typeof ResizeObserver === 'function') {
+      boardResizeObs = new ResizeObserver(() => {
+        if (state.bestmove && state.board === observedBoard) drawArrow(state.bestmove);
       });
-      boardResizeObserver.observe(board);
+      boardResizeObs.observe(board);
     }
   }
-  
-  function scan(){
-    if(!supportedAnalysisPath()){
-      status('Open analysis, study, or review mode to use Chess Topper.');
-      return;
-    }
-    
-    const p=readPosition();
+
+  // ─── Main scan loop ───────────────────────────────────────────────────────
+  function scan() {
+    const p = readPosition();
     observeBoard(p?.board);
-    
-    if(!p){
-      status('Waiting for a readable analysis board…');
-      return;
-    }
-    
-    $('.ct-position').textContent=p.fenComplete
-      ?'Position: site FEN'
-      :'Position: estimated'+(p.turnKnown?' (castling/en-passant unknown)':' (turn/castling/en-passant unknown)');
-    
-    if(p.fen!==state.lastFen){
-      state.lastFen=p.fen;
-      state.bestmove=null;
-      state.pv='';
-      arrowSvg.querySelector('#ct-line').setAttribute('opacity','0');
-      
-      if(state.analysisMode==='wasm'){
-        if(!state.engine) bootEngine();
-        if(state.engine&&state.ready) analyse(p.fen);
-        else state.pendingFallbackFen=p.fen;
-      }else{
+    if (!p) { status('Waiting for a chess board…'); return; }
+
+    $('.ct-position').textContent = p.fenComplete
+      ? 'Position: site FEN'
+      : 'Position: estimated' + (p.turnKnown ? ' (no castling/ep)' : ' (no turn/castling/ep)');
+
+    if (p.fen !== state.lastFen) {
+      state.lastFen = p.fen;
+      state.bestmove = null; state.pv = '';
+      arrowSvg.querySelector('#ct-line').setAttribute('opacity', '0');
+      if (state.analysisMode === 'wasm') {
+        if (!state.engine) bootEngine();
+        if (state.engine && state.ready) analyse(p.fen);
+        else state.pendingFallbackFen = p.fen;
+      } else {
         remoteAnalyse(p.fen);
       }
-    }else if(state.bestmove){
+    } else if (state.bestmove) {
       drawArrow(state.bestmove);
     }
   }
-  
-  setInterval(scan,1400);
-  window.addEventListener('resize',()=>state.bestmove&&drawArrow(state.bestmove));
-  window.addEventListener('scroll',()=>state.bestmove&&drawArrow(state.bestmove),true);
-  window.visualViewport?.addEventListener('resize',()=>state.bestmove&&drawArrow(state.bestmove));
-  window.visualViewport?.addEventListener('scroll',()=>state.bestmove&&drawArrow(state.bestmove));
-  window.addEventListener('orientationchange',()=>state.bestmove&&drawArrow(state.bestmove));
+
+  setInterval(scan, 1400);
+  window.addEventListener('resize', () => state.bestmove && drawArrow(state.bestmove));
+  window.addEventListener('scroll', () => state.bestmove && drawArrow(state.bestmove), true);
+  window.visualViewport?.addEventListener('resize', () => state.bestmove && drawArrow(state.bestmove));
+  window.visualViewport?.addEventListener('scroll',  () => state.bestmove && drawArrow(state.bestmove));
+  window.addEventListener('orientationchange', () => state.bestmove && drawArrow(state.bestmove));
 })();
