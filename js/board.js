@@ -2,11 +2,10 @@
   if (window.__chessTopperLoaded) return;
   window.__chessTopperLoaded = true;
 
-  // ─── Engine definitions (3 engines — explanation-engine excluded: hardcoded foreign extension ID) ───
+  // ─── Engine definitions (browser-safe UCI workers only) ───
   const ENGINES = [
     { id: 'sf19',   label: 'Stockfish 19', js: 'engine/stockfish-19.js'        },
     { id: 'dragon', label: 'Dragon',       js: 'engine/dragon.js'              },
-    { id: 'rodent', label: 'Rodent IV',    js: 'engine/rodent/rodent.js'       },
   ];
 
   const state = {
@@ -375,60 +374,6 @@
     $('.ct-eval').textContent = 'Evaluation: ' + txt;
   }
 
-  // ─── Rodent UCI wrapper ───────────────────────────────────────────────────
-  // Rodent uses Emscripten Module pattern — NOT a direct Worker UCI script.
-  // We wrap it in a blob Worker that loads it as a module and bridges UCI.
-  function makeRodentWorkerBlob(rodentUrl) {
-    const src = `
-const rodentUrl = ${JSON.stringify(rodentUrl)};
-let engine = null;
-let pendingCmds = [];
-
-// Load Rodent as an importScripts-style classic script
-importScripts(rodentUrl);
-
-// After importScripts, Module is available globally
-// Boot the Emscripten module
-const mod = Module;
-mod.onRuntimeInitialized = function() {
-  engine = mod;
-  // flush queued commands
-  for (const cmd of pendingCmds) sendCmd(cmd);
-  pendingCmds = [];
-};
-
-// Rodent outputs via Module.print
-mod.print = function(line) {
-  postMessage(line);
-};
-mod.printErr = function() {};
-
-function sendCmd(cmd) {
-  if (!engine) { pendingCmds.push(cmd); return; }
-  try {
-    // Rodent Emscripten exposes callMain or processCommand
-    if (typeof engine.ccall === 'function') {
-      engine.ccall('send_command', null, ['string'], [cmd]);
-    } else if (typeof engine.FS !== 'undefined') {
-      // write to stdin pipe
-      const encoder = new TextEncoder();
-      engine.FS.write(engine.FS.streams[0], encoder.encode(cmd + '\\n'), 0, cmd.length + 1);
-    }
-  } catch(e) {
-    // fallback: try processCommand if available
-    if (typeof engine.processCommand === 'function') {
-      engine.processCommand(cmd);
-    }
-  }
-}
-
-self.onmessage = function(e) {
-  sendCmd(e.data);
-};
-`;
-    return new Blob([src], { type: 'application/javascript' });
-  }
-
   // ─── Boot engine ──────────────────────────────────────────────────────────
   function getExtensionUrl(path) {
     // In an isolated content-script world Chrome can expose `chrome` as a
@@ -450,18 +395,8 @@ self.onmessage = function(e) {
 
     try {
       const url = getExtensionUrl(def.js);
-      let worker;
-
-      if (def.id === 'rodent') {
-        // Rodent needs a wrapper blob because it's an Emscripten Module, not a plain Worker script
-        const blob = makeRodentWorkerBlob(url);
-        const blobUrl = URL.createObjectURL(blob);
-        worker = new Worker(blobUrl);
-        URL.revokeObjectURL(blobUrl);
-      } else {
-        // Stockfish 19 and Dragon are plain Worker scripts
-        worker = new Worker(url);
-      }
+      // Both active engines are direct classic Worker UCI scripts.
+      const worker = new Worker(url);
 
       state.engine = worker;
 
@@ -505,7 +440,12 @@ self.onmessage = function(e) {
           state.ready = true;
           status(def.label + ' ready');
           const fen = state.pendingFallbackFen || state.lastFen;
-          if (fen) { state.pendingFallbackFen = ''; analyse(fen); }
+          if (fen && (state.analysisMode === 'wasm' || state.localFallbackActive)) {
+            state.pendingFallbackFen = '';
+            analyse(fen);
+          } else if (fen) {
+            state.pendingFallbackFen = fen;
+          }
           return;
         }
 
@@ -628,6 +568,9 @@ self.onmessage = function(e) {
         $('.ct-score').textContent = 'M' + score.mate;
       }
       state.bestmove = best;
+      state.localFallbackActive = false;
+      state.localSearchFen = '';
+      if (state.engine && state.ready) try { state.engine.postMessage('stop'); } catch (_) {}
       const pv = remotePv(data) || best;
       state.pv = pv;
       $('.ct-move').textContent = 'Best move: ' + best;
@@ -704,6 +647,9 @@ self.onmessage = function(e) {
         if (state.engine && state.ready) analyse(p.fen);
         else state.pendingFallbackFen = p.fen;
       } else {
+        // Auto mode starts the local engine in parallel. If the server is
+        // unavailable, the already-started local worker can answer instantly.
+        if (state.analysisMode === 'auto' && !state.engine) bootEngine();
         remoteAnalyse(p.fen);
       }
     } else if (state.bestmove) {

@@ -1,5 +1,5 @@
 const API_URL = "https://stockfishapi.com/v1/eval";
-const REQUEST_TIMEOUT_MS = 6000;
+const REQUEST_TIMEOUT_MS = 1500;
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message?.type !== "CT_REMOTE_ANALYZE") return;

@@ -11,7 +11,7 @@ Chess Topper provides an evaluation bar, best-move arrow, principal variation, a
 
 ## Analysis source
 
-- **Auto: server → WASM** — try the Stockfish API; if it errors or does not respond within 1 second, switch to local Stockfish WASM.
+- **Auto: server → WASM** — try the Stockfish API; if it errors or does not respond within 1.5 seconds, switch to local Stockfish WASM.
 - **Local WASM** — analyze locally without a server request.
 - **Server only** — use the remote API only.
 
@@ -44,7 +44,7 @@ Stockfish is GPLv3. Preserve upstream license and copyright notices when redistr
 - The engine is checked with a UCI smoke test in GitHub Actions; browser-level testing on each chess site is still needed. The full engine is approximately 94 MB combined, so first load can be slow and uses substantial storage.
 - The extension activates on supported chess domains and chooses the largest visible board, so it can follow live games as well as analysis/review boards. Site URL patterns and board DOM may change.
 - The reader prefers a site's native FEN when exposed. Otherwise it estimates FEN from piece DOM. That fallback cannot reliably recover castling rights or en-passant state and may not know whose turn it is; the panel labels those positions as estimated. Do not trust estimated-FEN results for exact game analysis.
-- Server requests time out after 1 second by design. Slow servers will cause local fallback even if they might eventually respond.
+- Server requests time out after 1.5 seconds by design. Slow servers will cause local fallback even if they might eventually respond.
 
 ## References
 
@@ -56,4 +56,4 @@ Stockfish is GPLv3. Preserve upstream license and copyright notices when redistr
 
 The local fallback now uses the official **Stockfish.js 19 full single-threaded** JS/WASM pair, including the full neural network rather than Lite. It is much larger to download and initialize, but avoids the cross-origin isolation (`SharedArrayBuffer`) requirement. It uses one CPU thread, so it may not match the speed of the full multithreaded build on supported isolated pages. A `.wasm` filename alone does not identify the strength—the matching JavaScript loader and WASM file must come from the same distribution variant.
 
-The best-move arrow accounts for black-side board orientation and the Chess.com `wc-chess-board` element, keeps its position current after scrolling/resizing, and offsets its arrowhead so it does not sit directly over the destination piece. Server requests have a longer timeout before Auto mode falls back to local WASM.
+The best-move arrow accounts for black-side board orientation and the Chess.com `wc-chess-board` element, keeps its position current after scrolling/resizing, and offsets its arrowhead so it does not sit directly over the destination piece. Auto mode starts the local worker while the server is being tried, then falls back quickly when the server is unavailable.
