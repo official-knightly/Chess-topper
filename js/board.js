@@ -96,14 +96,15 @@
 
   // ─── Engine definitions (browser-safe UCI workers only) ───
   const ENGINES = [
-    { id: 'sf19',   label: 'Stockfish 19', js: 'engine/stockfish-19.js', wasm: 'engine/stockfish-19.wasm' },
-    { id: 'dragon', label: 'Dragon',       js: 'engine/dragon.js',       wasm: 'engine/dragon.wasm'       },
+    { id: 'berserk', label: 'Berserk WASM', js: 'engine/berserk/berserk.js', wasm: 'engine/berserk/berserk_bg.wasm' },
+    { id: 'sf19',    label: 'Stockfish 19', js: 'engine/stockfish-19.js', wasm: 'engine/stockfish-19.wasm' },
+    { id: 'dragon',  label: 'Dragon',       js: 'engine/dragon.js', wasm: 'engine/dragon.wasm' },
   ];
 
   const ENGINE_START_TIMEOUT_MS = 90000;
 
   const state = {
-    bar: true, arrow: true, depth: 16, analysisMode: 'auto',
+    bar: true, arrow: true, depth: 16, analysisMode: 'berserk',
     engineIndex: 0,
     score: 0, bestmove: null, engine: null, ready: false,
     lastFen: '', board: null, pv: '',
@@ -126,7 +127,7 @@
       <div class="ct-line ct-engine">Mode: Auto (server → WASM)</div>
       <div class="ct-line ct-eng-row">
         <button class="ct-eng-prev" title="Previous engine">◀</button>
-        <span class="ct-eng-name">Stockfish 19</span>
+        <span class="ct-eng-name">Berserk WASM</span>
         <button class="ct-eng-next" title="Next engine">▶</button>
       </div>
       <div class="ct-line ct-move">Best move: —</div>
@@ -183,12 +184,12 @@
   $('.ct-eng-next').onclick = () => switchEngine(1);
 
   // ─── Settings ───
-  extension.storageGet({ analysisMode: 'auto', bar: true, arrow: true, depth: 16, engineIndex: 0 }).then(v => {
+  extension.storageGet({ analysisMode: 'berserk', bar: true, arrow: true, depth: 16, engineIndex: 0 }).then(v => {
     state.engineIndex = Math.min(ENGINES.length - 1, Math.max(0, Number(v.engineIndex) || 0));
     $('.ct-eng-name').textContent = ENGINES[state.engineIndex].label;
     applySettings(v);
   }).catch(() => {
-    applySettings({ analysisMode: 'auto', bar: true, arrow: true, depth: 16, engineIndex: 0 });
+    applySettings({ analysisMode: 'berserk', bar: true, arrow: true, depth: 16, engineIndex: 0 });
   });
 
   extension.onSettings(msg => {
@@ -197,7 +198,7 @@
 
   function applySettings(v) {
     const next = Object.assign({}, state, v || {});
-    const mode = ['auto', 'wasm', 'server'].includes(next.analysisMode) ? next.analysisMode : 'auto';
+    const mode = ['auto', 'wasm', 'server', 'berserk'].includes(next.analysisMode) ? next.analysisMode : 'berserk';
     const modeChanged = mode !== state.analysisMode;
     state.bar    = next.bar !== false;
     state.arrow  = next.arrow !== false;
@@ -205,13 +206,13 @@
     state.analysisMode = mode;
     $('.ct-bar').style.display   = state.bar   ? '' : 'none';
     arrowSvg.style.display       = state.arrow ? '' : 'none';
-    $('.ct-engine').textContent  = 'Mode: ' + ({ auto: 'Auto (server → WASM)', wasm: 'Local WASM', server: 'Server only' }[mode]);
+    $('.ct-engine').textContent  = 'Mode: ' + ({ auto: 'Auto (server → WASM)', wasm: 'Local WASM', berserk: 'Berserk WASM', server: 'Server only' }[mode]);
     if (modeChanged) {
       state.remoteSeq++; state.remoteBusy = false;
       state.bestmove = null; state.remoteFailed = false; state.pendingFallbackFen = '';
     }
     if (state.lastFen) {
-      if (mode === 'wasm') {
+      if (mode === 'wasm' || mode === 'berserk') {
         if (!state.engine) bootEngine();
         if (state.engine && state.ready) analyse(state.lastFen);
         else state.pendingFallbackFen = state.lastFen;
@@ -531,6 +532,9 @@
   // chrome-extension:// URL. Stockfish uses the shared loader so its runtime
   // check and WASM bootstrap are identical on every supported page.
   async function createEngineWorker(def) {
+    if (def.id === 'berserk' && typeof globalThis.__chessTopperStartBerserk === 'function') {
+      return globalThis.__chessTopperStartBerserk({ getURL: path => extension.getURL(path) });
+    }
     if (def.id === 'sf19' && typeof globalThis.__chessTopperStartStockfish === 'function') {
       return globalThis.__chessTopperStartStockfish({
         getURL: path => extension.getURL(path),
@@ -633,6 +637,10 @@ self.addEventListener('message', __chessTopperInit);
       state.engineStartTimer = setTimeout(() => failEngine('startup timeout'), ENGINE_START_TIMEOUT_MS);
 
       worker.onmessage = e => {
+        if (e.data && typeof e.data === 'object' && e.data.type === 'CHESS_TOPPER_ENGINE_ERROR') {
+          failEngine(e.data.error || 'Berserk worker initialization failed');
+          return;
+        }
         const line = typeof e.data === 'string' ? e.data.trim() : '';
         if (!line) return;
 
@@ -649,7 +657,7 @@ self.addEventListener('message', __chessTopperInit);
           state.ready = true;
           status(def.label + ' ready');
           const fen = state.pendingFallbackFen || state.lastFen;
-          if (fen && (state.analysisMode === 'wasm' || state.localFallbackActive)) {
+          if (fen && (state.analysisMode === 'wasm' || state.analysisMode === 'berserk' || state.localFallbackActive)) {
             state.pendingFallbackFen = '';
             analyse(fen);
           } else if (fen) {
@@ -659,7 +667,7 @@ self.addEventListener('message', __chessTopperInit);
         }
 
         // Only process engine output when we want local analysis
-        if (state.analysisMode !== 'wasm' && !state.localFallbackActive) return;
+        if (state.analysisMode !== 'wasm' && state.analysisMode !== 'berserk' && !state.localFallbackActive) return;
         if (state.localSearchFen && state.localSearchFen !== state.lastFen) return;
 
         const depth = line.match(/\bdepth (\d+)/);
@@ -855,7 +863,7 @@ self.addEventListener('message', __chessTopperInit);
         : 'Position: estimated (no castling/en-passant)';
       $('.ct-move').textContent = 'Best move: analysing…';
       $('.ct-pv').textContent = 'Line: calculating…';
-      if (state.analysisMode === 'wasm') {
+      if (state.analysisMode === 'wasm' || state.analysisMode === 'berserk') {
         if (!state.engine) bootEngine();
         if (state.engine && state.ready) analyse(p.fen);
         else state.pendingFallbackFen = p.fen;
