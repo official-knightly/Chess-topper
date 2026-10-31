@@ -12,14 +12,16 @@ Chess Topper provides an evaluation bar, best-move arrow, principal variation, a
 ## Analysis source
 
 - **Auto: server → WASM** — try the Stockfish API; if it errors or does not respond within 1.5 seconds, switch to local Stockfish WASM.
-- **Local WASM** — analyze locally without a server request.
+- **Berserk WASM (local)** — use the Berserk engine directly in the browser; this is the default engine and does not need a server API.
+- **Local WASM** — analyze with the currently selected local engine (Berserk, Stockfish 19, or Dragon).
+- **Auto: server → WASM** — try the Stockfish API; if it errors or does not respond within 1.5 seconds, switch to the selected local WASM engine.
 - **Server only** — use the remote API only.
 
 The API key is optional because the API allows limited keyless requests. If supplied, it is stored in `chrome.storage.local` for this browser profile. Do not commit or share it. Remote results are parsed from the current API's `eval`, `bestmove`, and `pvs` response fields. API availability and quotas still apply.
 
 ## Local engine
 
-GitHub Actions downloads the official Stockfish.js 19.0.1 **full single-threaded** release, validates the WASM header and expected full-engine file sizes, then commits the matching pair:
+GitHub Actions downloads the official Stockfish.js 19.0.1 **full single-threaded** release and synchronizes the matching Berserk wasm-bindgen JavaScript and WASM files from [Berserk Web](https://github.com/official-knightly/Berserk-web). It validates both binaries, runs engine smoke tests, and commits the assets. The Berserk WASM file is tracked with Git LFS.
 
 - `engine/stockfish-19.js`
 - `engine/stockfish-19.wasm`
@@ -34,11 +36,13 @@ Stockfish is GPLv3. Preserve upstream license and copyright notices when redistr
 
 - `manifest.json` — extension manifest and engine resource permissions
 - `html/popup.html`, `js/popup.js`, `css/popup.css` — settings popup
-- `js/engine-loader.js` — safe Stockfish/WASM bootstrap in an extension worker
+- `js/engine-loader.js` — Stockfish and Berserk/WASM worker bootstraps
 - `js/board.js`, `css/style.css` — analysis overlay and board reader
 - `js/background.js` — server API requests and timeout
+- `engine/berserk/berserk.js` + `berserk_bg.wasm` — matching Berserk WebAssembly bindings and engine binary (WASM tracked with Git LFS)
 - `engine/stockfish-19.js` + `.wasm` — full Stockfish 19 local engine
-- `scripts/smoke-stockfish.mjs` — CI test that starts the engine and requests a move
+- `scripts/smoke-stockfish.mjs` — CI test that starts Stockfish and requests a move
+- `scripts/smoke-berserk.mjs` — CI test that initializes Berserk WASM and verifies a UCI best move
 
 ## Known limitations
 
@@ -55,6 +59,6 @@ Stockfish is GPLv3. Preserve upstream license and copyright notices when redistr
 
 ## Engine and arrow behavior
 
-The local fallback now uses the official **Stockfish.js 19 full single-threaded** JS/WASM pair, including the full neural network rather than Lite. It is much larger to download and initialize, but avoids the cross-origin isolation (`SharedArrayBuffer`) requirement. It uses one CPU thread, so it may not match the speed of the full multithreaded build on supported isolated pages. A `.wasm` filename alone does not identify the strength—the matching JavaScript loader and WASM file must come from the same distribution variant.
+The default local engine is now Berserk WASM. Chess Topper loads its wasm-bindgen bundle into an isolated classic worker and adapts UCI commands so the existing analysis panel can consume its `info` and `bestmove` output. Stockfish 19 remains available as an alternate local engine.
 
 The best-move arrow accounts for black-side board orientation and the Chess.com `wc-chess-board` element, keeps its position current after scrolling/resizing, and offsets its arrowhead so it does not sit directly over the destination piece. Auto mode starts the local worker while the server is being tried, then falls back quickly when the server is unavailable.
