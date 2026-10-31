@@ -52,8 +52,19 @@ async function checkForUpdates() {
 }
 
 chrome.storage.local.get(
-  { analysisMode: "berserk", bar: true, arrow: true, depth: 16, apiKey: "" },
+  { analysisMode: "berserk", bar: true, arrow: true, depth: 16, apiKey: "", engineIndex: 0, berserkDefaultMigrated: false },
   (settings) => {
+    if (settings.berserkDefaultMigrated !== true) {
+      const migration = { berserkDefaultMigrated: true };
+      if (!settings.analysisMode || settings.analysisMode === "auto") {
+        settings.analysisMode = "berserk";
+        migration.analysisMode = "berserk";
+      }
+      if (Number(settings.engineIndex) === 1) {
+        migration.engineIndex = 2;
+      }
+      void chrome.storage.local.set(migration).catch(() => {});
+    }
     document.getElementById("analysisMode").value = settings.analysisMode || "berserk";
     document.getElementById("bar").checked = settings.bar !== false;
     document.getElementById("arrow").checked = settings.arrow !== false;
