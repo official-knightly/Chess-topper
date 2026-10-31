@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Chess Topper — Analysis Bar",
-  "version": "0.5.9",
-  "description": "v0.5.9 — Git LFS engine loading fallback.",
+  "version": "0.6.0",
+  "description": "v0.6.0 — Berserk WASM local analysis and best-move arrows.",
   "permissions": ["storage", "activeTab", "tabs"],
   "host_permissions": [
     "https://www.chess.com/*", "https://chess.com/*", "https://*.chess.com/*",
@@ -25,6 +25,7 @@
   }],
   "web_accessible_resources": [{
     "resources": [
+      "engine/berserk/berserk.js", "engine/berserk/berserk_bg.wasm",
       "engine/stockfish-19.js", "engine/stockfish-19.wasm",
       "engine/dragon.js", "engine/dragon.wasm",
       "engine/rodent/rodent.js", "engine/rodent/rodent.wasm",
