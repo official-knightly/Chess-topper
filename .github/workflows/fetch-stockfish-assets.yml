@@ -89,4 +89,18 @@ jobs:
             exit 0
           fi
           git commit -m "Sync and verify Stockfish and Berserk WASM engines"
-          git push
+
+          # Other commits can land while large LFS assets are being downloaded.
+          # Rebase this generated asset commit on the latest main before pushing.
+          for attempt in 1 2 3; do
+            git fetch origin main
+            git rebase origin/main
+            if git push origin HEAD:main; then
+              exit 0
+            fi
+            echo "Push raced with another main-branch update; retrying rebase (attempt $attempt)."
+            git rebase --abort || true
+            sleep "$attempt"
+          done
+          echo "Could not push engine assets after three synchronized attempts."
+          exit 1
