@@ -70,7 +70,16 @@
       }
       if (action === 'setStorage') {
         if (!storage) throw new Error('Extension storage API is unavailable');
-        const values = { engineIndex: Number(payload.values?.engineIndex) || 0 };
+        const source = payload.values || {};
+        const values = {};
+        if (Number.isInteger(Number(source.engineIndex)) && source.engineIndex !== undefined) {
+          values.engineIndex = Math.max(0, Math.min(2, Number(source.engineIndex)));
+        }
+        if (['auto', 'wasm', 'server', 'berserk'].includes(source.analysisMode)) {
+          values.analysisMode = source.analysisMode;
+        }
+        if (source.berserkDefaultMigrated === true) values.berserkDefaultMigrated = true;
+        if (!Object.keys(values).length) throw new Error('No permitted settings were supplied');
         callApi(done => storage.set(values, done))
           .then(value => respond(requestId, true, value))
           .catch(error => respond(requestId, false, null, error));
