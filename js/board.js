@@ -184,7 +184,23 @@
   $('.ct-eng-next').onclick = () => switchEngine(1);
 
   // ─── Settings ───
-  extension.storageGet({ analysisMode: 'berserk', bar: true, arrow: true, depth: 16, engineIndex: 0 }).then(v => {
+  extension.storageGet({ analysisMode: 'berserk', bar: true, arrow: true, depth: 16, engineIndex: 0, berserkDefaultMigrated: false }).then(v => {
+    if (v.berserkDefaultMigrated !== true) {
+      const migration = { berserkDefaultMigrated: true };
+      // Preserve an explicitly selected Dragon engine after inserting Berserk
+      // at the front of the local-engine list. The former auto default becomes
+      // direct Berserk analysis so the extension no longer silently uses only
+      // the remote Stockfish service.
+      if (!v.analysisMode || v.analysisMode === 'auto') {
+        v.analysisMode = 'berserk';
+        migration.analysisMode = 'berserk';
+      }
+      if (Number(v.engineIndex) === 1) {
+        v.engineIndex = 2;
+        migration.engineIndex = 2;
+      }
+      void extension.storageSet(migration).catch(() => {});
+    }
     state.engineIndex = Math.min(ENGINES.length - 1, Math.max(0, Number(v.engineIndex) || 0));
     $('.ct-eng-name').textContent = ENGINES[state.engineIndex].label;
     applySettings(v);
