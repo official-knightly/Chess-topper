@@ -10,6 +10,7 @@
 
   const SOURCE = 'ChessTopperRuntimeBridge';
   const allowedPaths = new Set([
+    'engine/berserk/berserk.js', 'engine/berserk/berserk_bg.wasm',
     'engine/stockfish-19.js', 'engine/stockfish-19.wasm',
     'engine/dragon.js', 'engine/dragon.wasm',
   ]);
