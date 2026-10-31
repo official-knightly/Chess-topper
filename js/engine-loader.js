@@ -101,23 +101,31 @@
     const blobUrl = URL.createObjectURL(new Blob([workerSource], {
       type: 'application/javascript',
     }));
-    try {
-      const worker = new Worker(blobUrl, {
-        type: 'classic',
-        name: 'ChessTopper-Stockfish-19',
-      });
-      worker.postMessage({
-        type: 'CHESS_TOPPER_INIT_WASM',
-        buffer: wasmBuffer,
-      }, [wasmBuffer]);
-      // The initialization message is delivered before this queued UCI
-      // message, so Stockfish receives UCI after its own onmessage handler is
-      // installed.
-      worker.postMessage('uci');
-      return worker;
-    } finally {
+    const worker = new Worker(blobUrl, {
+      type: 'classic',
+      name: 'ChessTopper-Stockfish-19',
+    });
+    // A Worker loads its blob script asynchronously. Revoking the object URL
+    // immediately after construction can race that fetch and cause a silent
+    // "Failed to construct Worker" startup failure. Keep it alive until the
+    // worker proves it has loaded (first message) or reports an error.
+    let blobReleased = false;
+    const releaseBlob = () => {
+      if (blobReleased) return;
+      blobReleased = true;
       URL.revokeObjectURL(blobUrl);
-    }
+    };
+    worker.addEventListener('message', releaseBlob, { once: true });
+    worker.addEventListener('error', releaseBlob, { once: true });
+    worker.postMessage({
+      type: 'CHESS_TOPPER_INIT_WASM',
+      buffer: wasmBuffer,
+    }, [wasmBuffer]);
+    // The initialization message is delivered before this queued UCI
+    // message, so Stockfish receives UCI after its own onmessage handler is
+    // installed.
+    worker.postMessage('uci');
+    return worker;
   }
 
 
@@ -258,13 +266,20 @@
     ].join('\n');
 
     const blobUrl = URL.createObjectURL(new Blob([workerSource], { type: 'application/javascript' }));
-    try {
-      const worker = new Worker(blobUrl, { type: 'classic', name: 'ChessTopper-Berserk-WASM' });
-      worker.postMessage({ type: 'CHESS_TOPPER_INIT_BERSERK', buffer: wasmBuffer }, [wasmBuffer]);
-      return worker;
-    } finally {
+    const worker = new Worker(blobUrl, { type: 'classic', name: 'ChessTopper-Berserk-WASM' });
+    // Do not revoke a blob worker's script URL until the worker has loaded it.
+    // The first UCI response arrives after WASM initialization; an error event
+    // also releases the URL if startup fails.
+    let blobReleased = false;
+    const releaseBlob = () => {
+      if (blobReleased) return;
+      blobReleased = true;
       URL.revokeObjectURL(blobUrl);
-    }
+    };
+    worker.addEventListener('message', releaseBlob, { once: true });
+    worker.addEventListener('error', releaseBlob, { once: true });
+    worker.postMessage({ type: 'CHESS_TOPPER_INIT_BERSERK', buffer: wasmBuffer }, [wasmBuffer]);
+    return worker;
   }
 
   globalThis.__chessTopperStartStockfish = startStockfish;
