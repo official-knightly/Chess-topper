@@ -22,6 +22,7 @@ The API key is optional because the API allows limited keyless requests. If supp
 
 GitHub Actions downloads the official Stockfish.js 19.0.1 **full single-threaded** release and synchronizes the matching Berserk wasm-bindgen JavaScript and WASM files from [Berserk Web](https://github.com/official-knightly/Berserk-web). It validates both binaries, runs engine smoke tests, and commits the assets. The Berserk WASM file is tracked with Git LFS.
 
+- `engine/berserk/berserk.js` + `engine/berserk/berserk_bg.wasm` — synchronized from Berserk Web
 - `engine/stockfish-19.js`
 - `engine/stockfish-19.wasm`
 
