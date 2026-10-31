@@ -186,7 +186,7 @@
       '  if (!__ctInitPromise) {',
       '    __ctInitPromise = (async function () {',
       '      if (!__ctWasmBuffer) throw new Error("Berserk WASM bytes were not supplied to the worker.");',
-      '      await __ctInit(__ctWasmBuffer);',
+      '      await __ctInit({ module_or_path: __ctWasmBuffer });',
       '      __ctEngine = new Engine();',
       '      __ctEngine.set_threads(1);',
       '      __ctEngine.set_position(__ctStartFen);',
