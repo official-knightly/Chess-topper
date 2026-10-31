@@ -105,7 +105,7 @@
 
   const state = {
     bar: true, arrow: true, depth: 16, analysisMode: 'berserk',
-    engineIndex: 0,
+    engineIndex: 0, settingsLoaded: false,
     score: 0, bestmove: null, engine: null, ready: false,
     lastFen: '', board: null, pv: '',
     uciReady: false,
@@ -203,8 +203,10 @@
     }
     state.engineIndex = Math.min(ENGINES.length - 1, Math.max(0, Number(v.engineIndex) || 0));
     $('.ct-eng-name').textContent = ENGINES[state.engineIndex].label;
+    state.settingsLoaded = true;
     applySettings(v);
   }).catch(() => {
+    state.settingsLoaded = true;
     applySettings({ analysisMode: 'berserk', bar: true, arrow: true, depth: 16, engineIndex: 0 });
   });
 
@@ -848,6 +850,7 @@ self.addEventListener('message', __chessTopperInit);
 
   // ─── Main scan loop ───────────────────────────────────────────────────────
   function scan() {
+    if (!state.settingsLoaded) return;
     const p = readPosition();
     observeBoard(p?.board);
     if (!p) {
