@@ -8,7 +8,7 @@
 </head>
 <body>
   <main>
-    <div class="brand"><span class="knight" aria-hidden="true"><svg viewBox="0 0 64 64" role="img"><path d="M13 55h40v-6H42l-2-8 9-9-3-10-8-5-1-9-10 2-5 8-7 6 4 9 9 2-3 9-7 5H13z" fill="#f5fff8"/><path d="M26 13l-7 8-4 11 5 8 10 2-3 9-7 5H13v-6h8l7-5 3-9-9-2-4-9 5-8 5-8z" fill="#bcebd0"/><circle cx="37" cy="22" r="2.4" fill="#124c32"/><path d="M33 29l10 2 4 7-7 3-10-4z" fill="#f5fff8"/></svg></span><div><b>Chess Topper</b><small>Local chess analysis · v0.5.9</small></div></div>
+    <div class="brand"><span class="knight" aria-hidden="true"><svg viewBox="0 0 64 64" role="img"><path d="M13 55h40v-6H42l-2-8 9-9-3-10-8-5-1-9-10 2-5 8-7 6 4 9 9 2-3 9-7 5H13z" fill="#f5fff8"/><path d="M26 13l-7 8-4 11 5 8 10 2-3 9-7 5H13v-6h8l7-5 3-9-9-2-4-9 5-8 5-8z" fill="#bcebd0"/><circle cx="37" cy="22" r="2.4" fill="#124c32"/><path d="M33 29l10 2 4 7-7 3-10-4z" fill="#f5fff8"/></svg></span><div><b>Chess Topper</b><small>Local chess analysis · v0.6.0</small></div></div>
     <section id="updateNotice" class="update-notice" hidden aria-live="polite">
       <strong>New update available</strong>
       <p id="updateText">A newer version is available on GitHub.</p>
@@ -16,7 +16,7 @@
       <small>Chrome requires you to download and reload the extension manually.</small>
     </section>
     <div class="notice">Use engine assistance only on computer, analysis, study, puzzle, or review boards where the chess site permits it. Do not use it during rated human games.</div>
-    <label class="row"><span>Analysis source</span><select id="analysisMode"><option value="auto">Auto: server → WASM</option><option value="wasm">Local WASM</option><option value="server">Server only</option></select></label>
+    <label class="row"><span>Analysis source</span><select id="analysisMode"><option value="berserk" selected>Berserk WASM (local)</option><option value="auto">Auto: server → WASM</option><option value="wasm">Local WASM (selected engine)</option><option value="server">Server only</option></select></label>
     <label class="switchrow"><span>Show evaluation bar</span><input id="bar" type="checkbox" checked></label>
     <label class="switchrow"><span>Show best-move arrow</span><input id="arrow" type="checkbox" checked></label>
     <label class="row"><span>API key (optional)</span><input id="apiKey" type="password" autocomplete="off" placeholder="Optional API key" style="width:145px;min-width:0"></label>
