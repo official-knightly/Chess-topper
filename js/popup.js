@@ -1,7 +1,7 @@
 const statusEl = document.getElementById("status");
 const REPO_URL = "https://github.com/official-knightly/Chess-topper";
 const MANIFEST_URL = "https://raw.githubusercontent.com/official-knightly/Chess-topper/main/manifest.json";
-const CURRENT_VERSION = "0.5.9";
+const CURRENT_VERSION = "0.6.0";
 
 function setStatus(message) {
   statusEl.textContent = message;
@@ -52,9 +52,9 @@ async function checkForUpdates() {
 }
 
 chrome.storage.local.get(
-  { analysisMode: "auto", bar: true, arrow: true, depth: 16, apiKey: "" },
+  { analysisMode: "berserk", bar: true, arrow: true, depth: 16, apiKey: "" },
   (settings) => {
-    document.getElementById("analysisMode").value = settings.analysisMode || "auto";
+    document.getElementById("analysisMode").value = settings.analysisMode || "berserk";
     document.getElementById("bar").checked = settings.bar !== false;
     document.getElementById("arrow").checked = settings.arrow !== false;
     document.getElementById("depth").value = String(settings.depth || 16);
