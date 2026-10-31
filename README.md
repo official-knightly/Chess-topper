@@ -11,10 +11,9 @@ Chess Topper provides an evaluation bar, best-move arrow, principal variation, a
 
 ## Analysis source
 
-- **Auto: server → WASM** — try the Stockfish API; if it errors or does not respond within 1.5 seconds, switch to local Stockfish WASM.
-- **Berserk WASM (local)** — use the Berserk engine directly in the browser; this is the default engine and does not need a server API.
-- **Local WASM** — analyze with the currently selected local engine (Berserk, Stockfish 19, or Dragon).
-- **Auto: server → WASM** — try the Stockfish API; if it errors or does not respond within 1.5 seconds, switch to the selected local WASM engine.
+- **Berserk WASM (local)** — run the Berserk engine directly in the browser. This is the default and does not need a server API.
+- **Auto: server → WASM** — try the Stockfish API, then fall back to the selected local engine if the service fails or times out.
+- **Local WASM** — use the currently selected local engine (Berserk, Stockfish 19, or Dragon) without making a server request.
 - **Server only** — use the remote API only.
 
 The API key is optional because the API allows limited keyless requests. If supplied, it is stored in `chrome.storage.local` for this browser profile. Do not commit or share it. Remote results are parsed from the current API's `eval`, `bestmove`, and `pvs` response fields. API availability and quotas still apply.
