@@ -23,7 +23,7 @@ if (wasm.length < 1_000_000 || wasm.subarray(0, 4).toString("hex") !== "0061736d
 const moduleUrl = "data:text/javascript;base64," + Buffer.from(source).toString("base64");
 const bindings = await import(moduleUrl);
 const wasmBuffer = wasm.buffer.slice(wasm.byteOffset, wasm.byteOffset + wasm.byteLength);
-await bindings.default(wasmBuffer);
+await bindings.default({ module_or_path: wasmBuffer });
 
 const engine = new bindings.Engine();
 try {
