@@ -1,7 +1,11 @@
-﻿# Large binary engine files tracked via Git LFS
+# Large binary engine assets are stored with Git LFS.
 *.wasm filter=lfs diff=lfs merge=lfs -text
-*.bin  filter=lfs diff=lfs merge=lfs -text
-*.zip  filter=lfs diff=lfs merge=lfs -text
-engine/*.js      filter=lfs diff=lfs merge=lfs -text
-engine/rodent/*.js filter=lfs diff=lfs merge=lfs -text
-engine/rodent/*.data filter=lfs diff=lfs merge=lfs -text
+*.bin filter=lfs diff=lfs merge=lfs -text
+*.zip filter=lfs diff=lfs merge=lfs -text
+
+# Only generated engine payloads use LFS. Keep engine-worker.js and ordinary
+# extension JavaScript files as regular Git blobs so checkout/rebase is clean.
+/engine/stockfish-19.js filter=lfs diff=lfs merge=lfs -text
+/engine/dragon.js filter=lfs diff=lfs merge=lfs -text
+/engine/rodent/rodent.js filter=lfs diff=lfs merge=lfs -text
+/engine/rodent/rodent.data filter=lfs diff=lfs merge=lfs -text
