@@ -600,13 +600,27 @@ self.addEventListener('message', __chessTopperInit);
 `;
     const blobUrl = URL.createObjectURL(new Blob([source], { type: 'application/javascript' }));
     const workerUrl = blobUrl + '#' + encodeURIComponent(wasmUrl);
+    let worker;
     try {
-      const worker = new Worker(workerUrl, { type: 'classic', name: 'ChessTopper-' + def.id });
-      worker.postMessage({ type: 'CHESS_TOPPER_INIT_WASM', buffer: wasmBuffer }, [wasmBuffer]);
-      return worker;
-    } finally {
+      worker = new Worker(workerUrl, { type: 'classic', name: 'ChessTopper-' + def.id });
+    } catch (error) {
       URL.revokeObjectURL(blobUrl);
+      throw error;
     }
+
+    // Worker startup is asynchronous. Revoking the Blob URL immediately after
+    // new Worker() can race the browser's script fetch and make the engine fail
+    // before its first UCI response. Keep the URL alive until it loads or errors.
+    let blobReleased = false;
+    const releaseBlob = () => {
+      if (blobReleased) return;
+      blobReleased = true;
+      URL.revokeObjectURL(blobUrl);
+    };
+    worker.addEventListener('message', releaseBlob, { once: true });
+    worker.addEventListener('error', releaseBlob, { once: true });
+    worker.postMessage({ type: 'CHESS_TOPPER_INIT_WASM', buffer: wasmBuffer }, [wasmBuffer]);
+    return worker;
   }
 
   function markEngineFailed(def, reason) {
