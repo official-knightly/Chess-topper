@@ -122,21 +122,17 @@
   panel.id = 'chess-topper-panel';
   panel.innerHTML = `
     <div class="ct-bar"><div class="ct-white"></div><div class="ct-score">0.0</div></div>
-    <div class="ct-card">
-      <div class="ct-title"><svg class="ct-knight-logo" viewBox="0 0 64 64" aria-hidden="true"><path d="M13 55h40v-6H42l-2-8 9-9-3-10-8-5-1-9-10 2-5 8-7 6 4 9 9 2-3 9-7 5H13z" fill="#176b45"/><circle cx="37" cy="22" r="2.4" fill="#fff"/></svg><span>Chess Topper</span></div>
-      <div class="ct-line ct-engine">Mode: Auto (server → WASM)</div>
-      <div class="ct-line ct-eng-row">
-        <button class="ct-eng-prev" title="Previous engine">◀</button>
-        <span class="ct-eng-name">Berserk WASM</span>
-        <button class="ct-eng-next" title="Next engine">▶</button>
-      </div>
+    <section class="ct-card">
+      <div class="ct-title"><svg class="ct-knight-logo" viewBox="0 0 64 64" aria-hidden="true"><path d="M13 55h40v-6H42l-2-8 9-9-3-10-8-5-1-9-10 2-5 8-7 6 4 9 9 2-3 9-7 5H13z" fill="#62dba7"/><circle cx="37" cy="22" r="2.4" fill="#10251d"/></svg><span>Chess Topper</span></div>
+      <div class="ct-line ct-engine">Mode: Local analysis</div>
+      <div class="ct-line ct-eng-row"><button class="ct-eng-prev" title="Previous engine" aria-label="Previous engine">‹</button><span class="ct-eng-name">Berserk WASM</span><button class="ct-eng-next" title="Next engine" aria-label="Next engine">›</button></div>
       <div class="ct-line ct-move">Best move: —</div>
       <div class="ct-line ct-eval">Evaluation: —</div>
       <div class="ct-line ct-pv">Line: —</div>
       <div class="ct-line ct-position">Position: waiting…</div>
       <div class="ct-status">Looking for a board…</div>
-      <button class="ct-toggle">Hide</button>
-    </div>`;
+      <button class="ct-toggle">Hide panel</button>
+    </section>`;
 
   // ─── Arrow SVG overlay ───
   const arrowSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
@@ -157,7 +153,7 @@
     const card = $('.ct-card');
     const hidden = card.style.display === 'none';
     card.style.display = hidden ? '' : 'none';
-    $('.ct-toggle').textContent = hidden ? 'Hide' : 'Show';
+    $('.ct-toggle').textContent = hidden ? 'Hide panel' : 'Show panel';
   };
 
   // ─── Engine switcher ───
@@ -222,6 +218,11 @@
     state.arrow  = next.arrow !== false;
     state.depth  = Math.min(20, Math.max(1, Number(next.depth) || 16));
     state.analysisMode = mode;
+    const requestedEngineIndex = Number(v?.engineIndex);
+    if (Number.isInteger(requestedEngineIndex) && requestedEngineIndex >= 0 &&
+        requestedEngineIndex < ENGINES.length && requestedEngineIndex !== state.engineIndex) {
+      switchEngine(requestedEngineIndex - state.engineIndex);
+    }
     $('.ct-bar').style.display   = state.bar   ? '' : 'none';
     arrowSvg.style.display       = state.arrow ? '' : 'none';
     $('.ct-engine').textContent  = 'Mode: ' + ({ auto: 'Auto (server → WASM)', wasm: 'Local WASM', berserk: 'Berserk WASM', server: 'Server only' }[mode]);
