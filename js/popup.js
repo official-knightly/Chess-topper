@@ -65,6 +65,7 @@ chrome.storage.local.get(
       }
       void chrome.storage.local.set(migration).catch(() => {});
     }
+    document.getElementById("engineIndex").value = String(settings.engineIndex || 0);
     document.getElementById("analysisMode").value = settings.analysisMode || "berserk";
     document.getElementById("bar").checked = settings.bar !== false;
     document.getElementById("arrow").checked = settings.arrow !== false;
@@ -75,6 +76,7 @@ chrome.storage.local.get(
 
 document.getElementById("apply").addEventListener("click", async () => {
   const settings = {
+    engineIndex: Number(document.getElementById("engineIndex").value),
     analysisMode: document.getElementById("analysisMode").value,
     bar: document.getElementById("bar").checked,
     arrow: document.getElementById("arrow").checked,
